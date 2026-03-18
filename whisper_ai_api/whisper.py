@@ -15,7 +15,7 @@ async def send_file(session, path):
 
 async def get_result(session, task_id):
     url = f"{RESULT_URL}/{task_id}"
-    max_attempts = 30  # до 60 секунд (30 × 2s)
+    max_attempts = 60  # до 3 минут (60 × 3s)
 
     for attempt in range(max_attempts):
         async with session.get(url, headers=headers) as resp:
@@ -29,7 +29,7 @@ async def get_result(session, task_id):
             return f"Ошибка обработки: {error_detail}"
 
         print(f"[whisper] попытка {attempt + 1}/{max_attempts}: {data}")
-        await asyncio.sleep(2)
+        await asyncio.sleep(3)
 
     return "Превышено время ожидания транскрипции"
 

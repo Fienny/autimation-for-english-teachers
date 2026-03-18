@@ -46,8 +46,11 @@ async def save_circle(message: types.Message, bot: Bot):
 
         await message.answer("Транскрипт получен, оцениваю по IELTS...")
 
-        evaluation = await evaluate_ielts(str(transcript))
-        await message.answer(evaluation)
+        try:
+            evaluation = await evaluate_ielts(str(transcript))
+            await message.answer(evaluation)
+        except Exception as e:
+            await message.answer(f"Ошибка ChatGPT: {e}")
 
 # # temp send message to any command or message (echo)
 # @dp.message()
