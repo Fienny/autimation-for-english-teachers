@@ -1,10 +1,9 @@
 import logging
-import subprocess
+import asyncio
 import shutil
 import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-import asyncio
 from datetime import datetime
 from chatgpt_api.gpt import transcribe_audio, evaluate_ielts
 from bot.config import BOT_TOKEN, VIDEO_SAVING_PATH
@@ -31,42 +30,64 @@ async def handle_voice(message: types.Message, bot: Bot):
         return
 
     file = await bot.get_file(message.voice.file_id)
-    date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     user_id = message.from_user.id
+    # file_id уникален для каждого аудио — исключает коллизии даже при одновременных запросах
+    unique_id = message.voice.file_id
 
-    ogg_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{date_str}.ogg")
-    mp3_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{date_str}.mp3")
+    ogg_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{unique_id}.ogg")
+    mp3_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{unique_id}.mp3")
 
     await bot.download_file(file.file_path, destination=ogg_path)
     logging.info(f"Сохранён ogg: {ogg_path} ({os.path.getsize(ogg_path)} байт)")
 
-    subprocess.run(
-        [FFMPEG, "-y", "-i", ogg_path, "-ar", "16000", "-ac", "1", "-b:a", "64k", mp3_path],
-        check=True,
-        capture_output=True,
-    )
-    logging.info(f"Сконвертирован mp3: {mp3_path} ({os.path.getsize(mp3_path)} байт)")
+    # asyncio.create_subprocess_exec — не блокирует event loop,
+    # другие пользователи обрабатываются параллельно пока идёт конвертация
+    try:
+        process = await asyncio.create_subprocess_exec(
+            FFMPEG, "-y", "-i", ogg_path, "-ar", "16000", "-ac", "1", "-b:a", "64k", mp3_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await process.communicate()
+        if process.returncode != 0:
+            raise RuntimeError(stderr.decode().strip())
+    except Exception as e:
+        logging.error(f"Ошибка конвертации ffmpeg для {user_id}: {e}")
+        await message.answer("Не удалось обработать аудиофайл. Попробуй ещё раз.")
+        return
+    finally:
+        # Удаляем ogg — он больше не нужен
+        if os.path.exists(ogg_path):
+            os.remove(ogg_path)
 
+    logging.info(f"Сконвертирован mp3: {mp3_path} ({os.path.getsize(mp3_path)} байт)")
     await message.answer("Голосовое получено, транскрибирую...")
 
     try:
         transcript = await transcribe_audio(mp3_path)
     except Exception as e:
-        await message.answer(f"Ошибка транскрипции: {e}")
+        logging.error(f"Ошибка транскрипции для {user_id}: {e}")
+        await message.answer("Ошибка транскрипции. Попробуй ещё раз.")
         return
+    finally:
+        if os.path.exists(mp3_path):
+            os.remove(mp3_path)
 
     if not transcript.strip():
         await message.answer("Не удалось распознать речь в аудио.")
         return
 
-    logging.info(f"Транскрипт: {transcript}")
+    logging.info(f"Транскрипт [{user_id}]: {transcript}")
     await message.answer("Транскрипт получен, оцениваю по IELTS...")
 
     try:
         evaluation = await evaluate_ielts(transcript)
-        await message.answer(evaluation)
     except Exception as e:
-        await message.answer(f"Ошибка оценки: {e}")
+        logging.error(f"Ошибка оценки IELTS для {user_id}: {e}")
+        await message.answer("Не удалось получить оценку. Попробуй ещё раз.")
+        return
+
+    await message.answer(evaluation)
 
 
 async def main():

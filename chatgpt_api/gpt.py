@@ -51,4 +51,9 @@ async def evaluate_ielts(transcript: str) -> str:
             {"role": "user", "content": transcript},
         ],
     )
-    return response.choices[0].message.content
+    if not response.choices:
+        raise ValueError("OpenAI вернул пустой ответ (choices пустой)")
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        raise ValueError("OpenAI вернул пустое сообщение")
+    return content
