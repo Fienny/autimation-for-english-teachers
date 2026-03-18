@@ -2,3 +2,4 @@ logging
 aiogram
 asyncio
 aiohttp
+openai

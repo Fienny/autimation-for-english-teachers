@@ -7,6 +7,7 @@ from aiogram.filters import Command
 import asyncio
 from datetime import datetime
 from whisper_ai_api.whisper import get_whisper_response
+from chatgpt_api.gpt import evaluate_ielts
 from bot.config import BOT_TOKEN, MY_CHAT_ID, VIDEO_SAVING_PATH
 
 # basic logging
@@ -48,8 +49,16 @@ async def save_circle(message: types.Message, bot: Bot):
 
         await message.answer("Голосовое получено, транскрибирую...")
 
-        result = await get_whisper_response(mp3_path)
-        await message.answer(str(result))
+        transcript = await get_whisper_response(mp3_path)
+
+        if str(transcript).startswith("Ошибка") or str(transcript).startswith("Превышено"):
+            await message.answer(str(transcript))
+            return
+
+        await message.answer("Транскрипт получен, оцениваю по IELTS...")
+
+        evaluation = await evaluate_ielts(str(transcript))
+        await message.answer(evaluation)
 
 # # temp send message to any command or message (echo)
 # @dp.message()
