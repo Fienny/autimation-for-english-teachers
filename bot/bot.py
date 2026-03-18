@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 import asyncio
@@ -22,21 +24,29 @@ async def send_welcome(message: types.Message):
 async def save_circle(message: types.Message, bot: Bot):
     if message.voice:
         file = await bot.get_file(message.voice.file_id)
-        
+
         date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         user_id = message.from_user.id
-        new_name = f"voice_{user_id}_{date_str}.mp3" # для голоса лучше .ogg или .mp3
-        
-        #saving
-        await bot.download_file(
-            file.file_path,
-            destination=f"{VIDEO_SAVING_PATH}/{new_name}"
+
+        ogg_name = f"voice_{user_id}_{date_str}.ogg"
+        mp3_name = f"voice_{user_id}_{date_str}.mp3"
+
+        ogg_path = os.path.join(VIDEO_SAVING_PATH, ogg_name)
+        mp3_path = os.path.join(VIDEO_SAVING_PATH, mp3_name)
+
+        # Скачиваем голосовое сообщение (Telegram отдаёт .ogg/opus)
+        await bot.download_file(file.file_path, destination=ogg_path)
+
+        # Конвертируем ogg → mp3 через ffmpeg
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", ogg_path, mp3_path],
+            check=True,
+            capture_output=True,
         )
-        path = f"{VIDEO_SAVING_PATH}/{new_name}"    
-        await message.answer("The voice is saved!")
 
-        result = await get_whisper_response(path)
+        await message.answer("Голосовое получено, транскрибирую...")
 
+        result = await get_whisper_response(mp3_path)
         await message.answer(str(result))
 
 # # temp send message to any command or message (echo)
