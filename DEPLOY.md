@@ -250,6 +250,37 @@ systemctl restart ielts-bot
 
 ---
 
+## Часть 10 — Автоочистка аудиофайлов (03:00 по Ташкенту)
+
+Бот удаляет временные файлы сам после каждого запроса, но на случай сбоя —
+настроим ночную очистку через cron.
+
+```bash
+# Сделать скрипт исполняемым
+chmod +x /opt/ielts-bot/cleanup_audio.sh
+
+# Открыть crontab от имени пользователя ieltsbot
+crontab -u ieltsbot -e
+```
+
+Добавь строку (22:00 UTC = 03:00 Ташкент, UTC+5):
+
+```
+0 22 * * * VIDEO_SAVING_PATH=/opt/ielts-bot/savings /opt/ielts-bot/cleanup_audio.sh
+```
+
+Сохрани и выйди (`Ctrl+O`, `Enter`, `Ctrl+X` если nano).
+
+```bash
+# Проверить что задача добавилась
+crontab -u ieltsbot -l
+
+# Проверить логи очистки (появятся после первого запуска)
+grep "ielts-bot-cleanup" /var/log/syslog
+```
+
+---
+
 ## Настройка файрвола (опционально, но рекомендуется)
 
 ```bash
@@ -310,5 +341,6 @@ chmod 755 /opt/ielts-bot/savings
 ├── venv/                  ← Python-окружение
 ├── .env                   ← СЕКРЕТЫ (не в git!)
 ├── requirements.txt
-└── ielts-bot.service
+├── ielts-bot.service
+└── cleanup_audio.sh      ← запускается cron в 03:00 по Ташкенту
 ```
