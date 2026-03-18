@@ -1,5 +1,6 @@
 import logging
 import subprocess
+import shutil
 import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -38,8 +39,9 @@ async def save_circle(message: types.Message, bot: Bot):
         await bot.download_file(file.file_path, destination=ogg_path)
 
         # Конвертируем ogg → mp3 через ffmpeg
+        ffmpeg = shutil.which("ffmpeg") or r"C:\Users\imfya\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
         subprocess.run(
-            ["ffmpeg", "-y", "-i", ogg_path, mp3_path],
+            [ffmpeg, "-y", "-i", ogg_path, mp3_path],
             check=True,
             capture_output=True,
         )
