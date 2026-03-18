@@ -1,6 +1,4 @@
 import logging
-import subprocess
-import shutil
 import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -31,25 +29,16 @@ async def save_circle(message: types.Message, bot: Bot):
         user_id = message.from_user.id
 
         ogg_name = f"voice_{user_id}_{date_str}.ogg"
-        mp3_name = f"voice_{user_id}_{date_str}.mp3"
 
         ogg_path = os.path.join(VIDEO_SAVING_PATH, ogg_name)
-        mp3_path = os.path.join(VIDEO_SAVING_PATH, mp3_name)
 
         # Скачиваем голосовое сообщение (Telegram отдаёт .ogg/opus)
         await bot.download_file(file.file_path, destination=ogg_path)
 
-        # Конвертируем ogg → mp3 через ffmpeg
-        ffmpeg = shutil.which("ffmpeg") or r"C:\Users\imfya\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
-        subprocess.run(
-            [ffmpeg, "-y", "-i", ogg_path, mp3_path],
-            check=True,
-            capture_output=True,
-        )
-
         await message.answer("Голосовое получено, транскрибирую...")
 
-        transcript = await get_whisper_response(mp3_path)
+        # Whisper API поддерживает ogg напрямую — конвертация не нужна
+        transcript = await get_whisper_response(ogg_path)
 
         if str(transcript).startswith("Ошибка") or str(transcript).startswith("Превышено"):
             await message.answer(str(transcript))
