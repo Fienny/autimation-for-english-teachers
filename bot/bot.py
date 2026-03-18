@@ -1,70 +1,77 @@
 import logging
+import subprocess
+import shutil
 import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 import asyncio
 from datetime import datetime
-from whisper_ai_api.whisper import get_whisper_response
-from chatgpt_api.gpt import evaluate_ielts
-from bot.config import BOT_TOKEN, MY_CHAT_ID, VIDEO_SAVING_PATH
+from chatgpt_api.gpt import transcribe_audio, evaluate_ielts
+from bot.config import BOT_TOKEN, VIDEO_SAVING_PATH
 
-# basic logging
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# temp send hello func - handles onlty given commands
+FFMPEG = (
+    shutil.which("ffmpeg")
+    or r"C:\Users\imfya\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
+)
+
+
 @dp.message(Command('start', 'help'))
 async def send_welcome(message: types.Message):
-    await message.reply("Hi!\nI'm temp bot's message")
+    await message.reply("Отправь голосовое сообщение на английском — получишь оценку IELTS.")
 
-# Circle video saving
+
 @dp.message()
-async def save_circle(message: types.Message, bot: Bot):
-    if message.voice:
-        file = await bot.get_file(message.voice.file_id)
+async def handle_voice(message: types.Message, bot: Bot):
+    if not message.voice:
+        return
 
-        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        user_id = message.from_user.id
+    file = await bot.get_file(message.voice.file_id)
+    date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    user_id = message.from_user.id
 
-        ogg_name = f"voice_{user_id}_{date_str}.ogg"
+    ogg_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{date_str}.ogg")
+    mp3_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{date_str}.mp3")
 
-        ogg_path = os.path.join(VIDEO_SAVING_PATH, ogg_name)
+    await bot.download_file(file.file_path, destination=ogg_path)
+    logging.info(f"Сохранён ogg: {ogg_path} ({os.path.getsize(ogg_path)} байт)")
 
-        # Скачиваем голосовое сообщение (Telegram отдаёт .ogg/opus)
-        await bot.download_file(file.file_path, destination=ogg_path)
+    subprocess.run(
+        [FFMPEG, "-y", "-i", ogg_path, "-ar", "16000", "-ac", "1", "-b:a", "64k", mp3_path],
+        check=True,
+        capture_output=True,
+    )
+    logging.info(f"Сконвертирован mp3: {mp3_path} ({os.path.getsize(mp3_path)} байт)")
 
-        await message.answer("Голосовое получено, транскрибирую...")
+    await message.answer("Голосовое получено, транскрибирую...")
 
-        # Whisper API поддерживает ogg напрямую — конвертация не нужна
-        transcript = await get_whisper_response(ogg_path)
-        transcript_text = str(transcript).strip()
+    try:
+        transcript = await transcribe_audio(mp3_path)
+    except Exception as e:
+        await message.answer(f"Ошибка транскрипции: {e}")
+        return
 
-        if not transcript_text or transcript_text in ("None", "Нет результата"):
-            await message.answer("Whisper не смог распознать речь в аудио.")
-            return
+    if not transcript.strip():
+        await message.answer("Не удалось распознать речь в аудио.")
+        return
 
-        if transcript_text.startswith("Ошибка") or transcript_text.startswith("Превышено"):
-            await message.answer(transcript_text)
-            return
+    logging.info(f"Транскрипт: {transcript}")
+    await message.answer("Транскрипт получен, оцениваю по IELTS...")
 
-        await message.answer("Транскрипт получен, оцениваю по IELTS...")
+    try:
+        evaluation = await evaluate_ielts(transcript)
+        await message.answer(evaluation)
+    except Exception as e:
+        await message.answer(f"Ошибка оценки: {e}")
 
-        try:
-            evaluation = await evaluate_ielts(str(transcript))
-            await message.answer(evaluation)
-        except Exception as e:
-            await message.answer(f"Ошибка ChatGPT: {e}")
-
-# # temp send message to any command or message (echo)
-# @dp.message()
-# async def echo(message: types.Message):
-#     await message.answer(message.text)
 
 async def main():
     await dp.start_polling(bot, skip_updates=True)
 
-# Loop polling
+
 if __name__ == '__main__':
     asyncio.run(main())

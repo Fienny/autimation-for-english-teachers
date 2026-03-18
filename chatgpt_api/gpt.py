@@ -34,6 +34,15 @@ Advice: [Specific actionable tips]
 Now evaluate the following transcript:"""
 
 
+async def transcribe_audio(mp3_path: str) -> str:
+    with open(mp3_path, "rb") as f:
+        result = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=f,
+        )
+    return result.text
+
+
 async def evaluate_ielts(transcript: str) -> str:
     response = await client.chat.completions.create(
         model="gpt-4o",
