@@ -1,4 +1,9 @@
-BOT_TOKEN = "8716627566:AAHetGZWlAt4JModw8xJKtP97twofihhxBE"
-MY_CHAT_ID = 266889430
-VIDEO_SAVING_PATH = r"D:\asilbek_projects\automatization\bot\savings"
-OPENAI_API_KEY = "YOUR_OPENAI_API_KEY"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+MY_CHAT_ID = int(os.getenv("MY_CHAT_ID", "0"))
+VIDEO_SAVING_PATH = os.getenv("VIDEO_SAVING_PATH", "/opt/ielts-bot/savings")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
