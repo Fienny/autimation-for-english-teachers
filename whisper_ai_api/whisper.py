@@ -22,7 +22,7 @@ async def get_result(session, task_id):
             data = await resp.json()
 
         if data.get("status") == "completed":
-            return data.get("result", "Нет результата")
+            return data.get("result") or ""
 
         if data.get("status") in ("error", "failed"):
             error_detail = data.get("error") or data

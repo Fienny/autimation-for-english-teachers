@@ -39,9 +39,14 @@ async def save_circle(message: types.Message, bot: Bot):
 
         # Whisper API поддерживает ogg напрямую — конвертация не нужна
         transcript = await get_whisper_response(ogg_path)
+        transcript_text = str(transcript).strip()
 
-        if str(transcript).startswith("Ошибка") or str(transcript).startswith("Превышено"):
-            await message.answer(str(transcript))
+        if not transcript_text or transcript_text in ("None", "Нет результата"):
+            await message.answer("Whisper не смог распознать речь в аудио.")
+            return
+
+        if transcript_text.startswith("Ошибка") or transcript_text.startswith("Превышено"):
+            await message.answer(transcript_text)
             return
 
         await message.answer("Транскрипт получен, оцениваю по IELTS...")
