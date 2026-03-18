@@ -1,7 +1,7 @@
 import os
 import aiohttp
 import asyncio
-from .config import BASE_URL, headers
+from .config import BASE_URL, RESULT_URL, headers
 
 
 async def send_file(session, path):
@@ -14,7 +14,7 @@ async def send_file(session, path):
 
 
 async def get_result(session, task_id):
-    url = f"{BASE_URL}/{task_id}"
+    url = f"{RESULT_URL}/{task_id}"
     max_attempts = 30  # до 60 секунд (30 × 2s)
 
     for attempt in range(max_attempts):
