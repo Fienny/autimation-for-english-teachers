@@ -1,98 +1,77 @@
-import logging
 import asyncio
-import shutil
-import os
-from aiogram import Bot, Dispatcher, types
+import logging
+
+from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import Command
-from datetime import datetime
-from chatgpt_api.gpt import transcribe_audio, evaluate_ielts
-from bot.config import BOT_TOKEN, VIDEO_SAVING_PATH
+
+from bot.config import BOT_TOKEN, GROUP_ID
+from bot.roles import get_user_role
+from bot.handlers import student, teacher, group
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-FFMPEG = (
-    shutil.which("ffmpeg")
-    or r"C:\Users\imfya\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
-)
+# ---------------------------------------------------------------------------
+# Роутер для личных сообщений — определяет роль и передаёт дальше
+# ---------------------------------------------------------------------------
+private_router = Router()
+private_router.message.filter(F.chat.type == "private")
 
 
-@dp.message(Command('start', 'help'))
-async def send_welcome(message: types.Message):
-    await message.reply("Отправь голосовое сообщение на английском — получишь оценку IELTS.")
+@private_router.message(Command("start", "help"))
+async def private_start(message: types.Message):
+    role = await get_user_role(bot, message.from_user.id)
 
-
-@dp.message()
-async def handle_voice(message: types.Message, bot: Bot):
-    if not message.voice:
-        return
-
-    file = await bot.get_file(message.voice.file_id)
-    user_id = message.from_user.id
-    # file_id уникален для каждого аудио — исключает коллизии даже при одновременных запросах
-    unique_id = message.voice.file_id
-
-    ogg_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{unique_id}.ogg")
-    mp3_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{unique_id}.mp3")
-
-    await bot.download_file(file.file_path, destination=ogg_path)
-    logging.info(f"Сохранён ogg: {ogg_path} ({os.path.getsize(ogg_path)} байт)")
-
-    # asyncio.create_subprocess_exec — не блокирует event loop,
-    # другие пользователи обрабатываются параллельно пока идёт конвертация
-    try:
-        process = await asyncio.create_subprocess_exec(
-            FFMPEG, "-y", "-i", ogg_path, "-ar", "16000", "-ac", "1", "-b:a", "64k", mp3_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+    if role == "outsider":
+        await message.answer(
+            "Доступ закрыт.\n"
+            "Ты должен состоять в группе, которую обслуживает этот бот."
         )
-        _, stderr = await process.communicate()
-        if process.returncode != 0:
-            raise RuntimeError(stderr.decode().strip())
-    except Exception as e:
-        logging.error(f"Ошибка конвертации ffmpeg для {user_id}: {e}")
-        await message.answer("Не удалось обработать аудиофайл. Попробуй ещё раз.")
-        return
-    finally:
-        # Удаляем ogg — он больше не нужен
-        if os.path.exists(ogg_path):
-            os.remove(ogg_path)
-
-    logging.info(f"Сконвертирован mp3: {mp3_path} ({os.path.getsize(mp3_path)} байт)")
-    await message.answer("Голосовое получено, транскрибирую...")
-
-    try:
-        transcript = await transcribe_audio(mp3_path)
-    except Exception as e:
-        logging.error(f"Ошибка транскрипции для {user_id}: {e}")
-        await message.answer("Ошибка транскрипции. Попробуй ещё раз.")
-        return
-    finally:
-        if os.path.exists(mp3_path):
-            os.remove(mp3_path)
-
-    if not transcript.strip():
-        await message.answer("Не удалось распознать речь в аудио.")
         return
 
-    logging.info(f"Транскрипт [{user_id}]: {transcript}")
-    await message.answer("Транскрипт получен, оцениваю по IELTS...")
+    if role == "teacher":
+        await teacher.teacher_start(message)
+    else:
+        await student.student_start(message)
 
-    try:
-        evaluation = await evaluate_ielts(transcript)
-    except Exception as e:
-        logging.error(f"Ошибка оценки IELTS для {user_id}: {e}")
-        await message.answer("Не удалось получить оценку. Попробуй ещё раз.")
+
+@private_router.message()
+async def private_message(message: types.Message):
+    role = await get_user_role(bot, message.from_user.id)
+
+    if role == "outsider":
+        await message.answer(
+            "Доступ закрыт.\n"
+            "Ты должен состоять в группе, которую обслуживает этот бот."
+        )
         return
 
-    await message.answer(evaluation)
+    if role == "teacher":
+        await teacher.teacher_voice(message, bot)
+    else:
+        await student.student_voice(message, bot)
+
+
+# ---------------------------------------------------------------------------
+# Роутер для группы — только наша группа
+# ---------------------------------------------------------------------------
+group_router = Router()
+group_router.message.filter(F.chat.id == GROUP_ID)
+
+group_router.include_router(group.router)
+
+# ---------------------------------------------------------------------------
+# Регистрация роутеров
+# ---------------------------------------------------------------------------
+dp.include_router(private_router)
+dp.include_router(group_router)
 
 
 async def main():
     await dp.start_polling(bot, skip_updates=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())
