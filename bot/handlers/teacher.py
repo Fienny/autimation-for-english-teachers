@@ -7,7 +7,7 @@ from aiogram import Bot, Router, types
 from aiogram.filters import Command
 
 from bot.config import VIDEO_SAVING_PATH
-from chatgpt_api.gpt import transcribe_audio, evaluate_ielts_teacher
+from chatgpt_api.gpt import transcribe_audio, evaluate_ielts_teacher, split_message
 
 router = Router()
 
@@ -89,4 +89,5 @@ async def teacher_voice(message: types.Message, bot: Bot):
         await message.answer("Не удалось получить оценку. Попробуй ещё раз.")
         return
 
-    await message.answer(evaluation, parse_mode="Markdown")
+    for chunk in split_message(evaluation):
+        await message.answer(chunk, parse_mode="Markdown")

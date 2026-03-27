@@ -3,6 +3,26 @@ from bot.config import OPENAI_API_KEY
 
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
+TG_LIMIT = 4096
+
+
+def split_message(text: str) -> list[str]:
+    """Split text into chunks that fit Telegram's 4096-char limit."""
+    if len(text) <= TG_LIMIT:
+        return [text]
+    chunks = []
+    while text:
+        if len(text) <= TG_LIMIT:
+            chunks.append(text)
+            break
+        # Split at last newline before the limit
+        split_at = text.rfind("\n", 0, TG_LIMIT)
+        if split_at == -1:
+            split_at = TG_LIMIT
+        chunks.append(text[:split_at])
+        text = text[split_at:].lstrip("\n")
+    return chunks
+
 IELTS_PROMPT = """You are a certified IELTS Speaking examiner.
 You will receive a transcript of a candidate's spoken response. Your task is to evaluate it strictly according to official IELTS Speaking band descriptors.
 Be strict but fair. Do not inflate the score. Keep every section brief — 1–2 sentences max per point, no repetition.
