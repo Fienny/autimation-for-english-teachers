@@ -7,7 +7,7 @@ from aiogram import Bot, Router, types
 from aiogram.filters import Command
 
 from bot.config import VIDEO_SAVING_PATH
-from chatgpt_api.gpt import transcribe_audio, evaluate_ielts
+from chatgpt_api.gpt import transcribe_audio, evaluate_ielts_teacher
 
 router = Router()
 
@@ -20,8 +20,13 @@ FFMPEG = (
 @router.message(Command("start", "help"))
 async def teacher_start(message: types.Message):
     await message.answer(
-        "Добро пожаловать в панель учителя!\n\n"
-        "Отправь голосовое сообщение на английском — получишь оценку IELTS."
+        "Панель учителя\n\n"
+        "Отправь голосовое ответа ученика — получишь:\n"
+        "• Баллы IELTS по 4 критериям\n"
+        "• Проверку на аутентичность (бумажка / ИИ)\n"
+        "• Топ 3 грамматические ошибки\n"
+        "• Топ 10 слов используемых некорректно + замены\n"
+        "• Разбор раскрытия идей"
     )
 
 
@@ -75,13 +80,13 @@ async def teacher_voice(message: types.Message, bot: Bot):
         return
 
     logging.info(f"[teacher] Транскрипт [{user_id}]: {transcript}")
-    await message.answer("Транскрипт получен, оцениваю по IELTS...")
+    await message.answer("Транскрипт получен, анализирую...")
 
     try:
-        evaluation = await evaluate_ielts(transcript)
+        evaluation = await evaluate_ielts_teacher(transcript)
     except Exception as e:
         logging.error(f"[teacher] Ошибка оценки IELTS для {user_id}: {e}")
         await message.answer("Не удалось получить оценку. Попробуй ещё раз.")
         return
 
-    await message.answer(evaluation)
+    await message.answer(evaluation, parse_mode="Markdown")
