@@ -7,6 +7,7 @@ from aiogram import Bot, Router, types
 from aiogram.filters import Command
 
 from bot.config import VIDEO_SAVING_PATH
+from bot.locks import get_user_lock
 from chatgpt_api.gpt import transcribe_audio, evaluate_ielts_teacher, split_message
 
 router = Router()
@@ -35,6 +36,14 @@ async def teacher_voice(message: types.Message, bot: Bot):
     if not message.voice:
         return
 
+    lock = get_user_lock(message.from_user.id)
+    if lock.locked():
+        await message.answer("Обрабатываю предыдущее сообщение, подожди...")
+    async with lock:
+        await _process_voice(message, bot)
+
+
+async def _process_voice(message: types.Message, bot: Bot):
     file = await bot.get_file(message.voice.file_id)
     user_id = message.from_user.id
     unique_id = message.voice.file_id
