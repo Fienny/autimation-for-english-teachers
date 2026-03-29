@@ -89,8 +89,7 @@ ielts-bot/
 Создай файл `.env` на сервере (по шаблону `.env.example`):
 
 ```env
-BOT_TOKEN=8716627566:AAH...              # Токен бота от @BotFather
-MY_CHAT_ID=266889430                     # Твой Telegram ID
+BOT_TOKEN=your_bot_token_here            # Токен бота от @BotFather
 OPENAI_API_KEY=sk-...                    # Ключ OpenAI API
 VIDEO_SAVING_PATH=/opt/ielts-bot/savings # Папка для аудио
 GROUP_ID=-1001234567890                  # ID группы (учителя = admin группы)

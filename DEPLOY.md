@@ -141,11 +141,14 @@ nano /opt/ielts-bot/.env
 Вставь содержимое (замени значения на свои):
 
 ```env
-BOT_TOKEN=8716627566:AAHetGZWlAt4JModw8xJKtP97twofihhxBE
-MY_CHAT_ID=266889430
+BOT_TOKEN=your_bot_token_here
 OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 VIDEO_SAVING_PATH=/opt/ielts-bot/savings
+GROUP_ID=-1001234567890
 ```
+
+> `GROUP_ID` — ID твоей Telegram-группы (число со знаком минус).
+> Как узнать: добавь `@userinfobot` в группу, напиши `/start`, скопируй ID, удали бота.
 
 Сохрани: `Ctrl+O`, `Enter`, `Ctrl+X`
 
