@@ -13,12 +13,7 @@ from chatgpt_api.gpt import transcribe_audio, evaluate_ielts_teacher, split_mess
 
 router = Router()
 
-os.makedirs(VIDEO_SAVING_PATH, exist_ok=True)
-
-FFMPEG = (
-    shutil.which("ffmpeg")
-    or r"C:\Users\imfya\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
-)
+FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 
 
 @router.message(Command("start", "help"))
