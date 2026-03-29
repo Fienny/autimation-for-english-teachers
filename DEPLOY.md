@@ -1,200 +1,163 @@
 # Деплой IELTS Bot на DigitalOcean Droplet
 
-Пошаговая инструкция по развёртыванию бота на Ubuntu-сервере DigitalOcean.
+---
+
+## ПОЛНЫЙ СБРОС (если уже что-то стоит и надо начать заново)
+
+Выполняй от `root`:
+
+```bash
+# Остановить и удалить сервис
+systemctl stop ielts-bot
+systemctl disable ielts-bot
+rm -f /etc/systemd/system/ielts-bot.service
+systemctl daemon-reload
+
+# Удалить всё приложение
+rm -rf /opt/ielts-bot
+
+# Удалить пользователя
+userdel -r ieltsbot 2>/dev/null || true
+
+# Удалить cron-задачу если была
+crontab -u ieltsbot -r 2>/dev/null || true
+```
+
+После этого можно начинать установку с нуля с Части 3.
 
 ---
 
-## Часть 1 — Создание Droplet на DigitalOcean
+## Часть 1 — Создание Droplet
 
 1. Зайди на [digitalocean.com](https://digitalocean.com) → **Create** → **Droplets**
 2. Выбери:
-   - **Region:** ближайший к аудитории (например, Frankfurt или Amsterdam)
+   - **Region:** ближайший к аудитории (Frankfurt или Amsterdam)
    - **Image:** Ubuntu 22.04 LTS x64
-   - **Plan:** Basic — **Regular** — **$6/mo** (1 vCPU / 1 GB RAM / 25 GB SSD)
-     > Если будет много пользователей — выбирай $12/mo (2 GB RAM)
-   - **Authentication:** SSH Key (рекомендуется) или Password
-3. Нажми **Create Droplet**
-4. Скопируй IP-адрес дроплета (например, `164.90.xxx.xxx`)
+   - **Plan:** Basic → Regular → **$6/mo** (1 vCPU / 1 GB RAM / 25 GB SSD)
+   - **Authentication:** SSH Key или Password
+3. Нажми **Create Droplet**, скопируй IP-адрес
 
 ---
 
-## Часть 2 — Первое подключение к серверу
+## Часть 2 — Подключение к серверу
 
 ```bash
-# Подключись по SSH с локального компьютера
-ssh root@164.90.xxx.xxx
+ssh root@<IP-адрес>
 
-# Обнови систему
+# Обновить систему
 apt update && apt upgrade -y
 ```
 
 ---
 
-## Часть 3 — Установка зависимостей системы
+## Часть 3 — Установка системных зависимостей
 
 ```bash
-# Python 3.11+ и pip
-apt install -y python3 python3-pip python3-venv python3-full
+apt install -y python3 python3-pip python3-venv python3-full ffmpeg git
 
-# FFmpeg (конвертация аудио OGG → MP3)
-apt install -y ffmpeg
-
-# Git
-apt install -y git
-
-# Проверка версий
-python3 --version   # должно быть 3.11+
+# Проверка
+python3 --version    # 3.11+
 ffmpeg -version
 git --version
 ```
 
 ---
 
-## Часть 4 — Создание отдельного пользователя (безопасность)
+## Часть 4 — Создание пользователя и директории
 
 ```bash
-# Создать пользователя ieltsbot
 adduser --disabled-password --gecos "" ieltsbot
-
-# Создать рабочую директорию
-mkdir -p /opt/ielts-bot/savings
+mkdir -p /opt/ielts-bot
 chown -R ieltsbot:ieltsbot /opt/ielts-bot
 ```
 
+> Папка `savings` для аудиофайлов создаётся ботом автоматически при запуске.
+
 ---
 
-## Часть 5 — Загрузка кода на сервер
-
-### Вариант A: через Git (рекомендуется)
+## Часть 5 — Загрузка кода
 
 ```bash
-# Переключись на пользователя ieltsbot
 su - ieltsbot
-
-# Клонировать репозиторий
 cd /opt/ielts-bot
-git clone <ссылка-на-репозиторий> .
 
-# Вернуться к root
+git clone -b claude/fix-telegram-whisper-bugs-tze0T <ссылка-на-репозиторий> .
+
 exit
 ```
 
-### Вариант B: через scp (с локального компьютера)
-
-Выполняй эти команды **на своём компьютере**, не на сервере:
-
-```bash
-# Упаковать проект
-cd /путь/к/проекту
-zip -r ielts-bot.zip . \
-  --exclude ".git/*" \
-  --exclude "bot/savings/*" \
-  --exclude "venv/*" \
-  --exclude "__pycache__/*" \
-  --exclude "*.pyc" \
-  --exclude ".env"
-
-# Загрузить на сервер
-scp ielts-bot.zip root@164.90.xxx.xxx:/opt/ielts-bot/
-
-# На сервере — распаковать
-ssh root@164.90.xxx.xxx
-cd /opt/ielts-bot
-apt install -y unzip
-unzip ielts-bot.zip
-chown -R ieltsbot:ieltsbot /opt/ielts-bot
-```
+> Замени `<ссылка-на-репозиторий>` на реальный URL репозитория.
 
 ---
 
-## Часть 6 — Настройка Python-окружения
+## Часть 6 — Python-окружение
 
 ```bash
-# Переключиться на пользователя бота
 su - ieltsbot
 cd /opt/ielts-bot
 
-# Создать виртуальное окружение
 python3 -m venv venv
-
-# Активировать
 source venv/bin/activate
-
-# Установить зависимости
 pip install --upgrade pip
 pip install -r requirements.txt
-
-# Деактивировать
 deactivate
+
 exit
 ```
 
 ---
 
-## Часть 7 — Создание файла .env с секретами
+## Часть 7 — Файл .env с секретами
 
 ```bash
-# Создать .env файл (от root)
 nano /opt/ielts-bot/.env
 ```
 
-Вставь содержимое (замени значения на свои):
+Вставь и заполни своими значениями:
 
 ```env
-BOT_TOKEN=your_bot_token_here
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+BOT_TOKEN=токен_от_BotFather
+OPENAI_API_KEY=sk-...
 VIDEO_SAVING_PATH=/opt/ielts-bot/savings
 GROUP_ID=-1001234567890
 ```
 
-> `GROUP_ID` — ID твоей Telegram-группы (число со знаком минус).
-> Как узнать: добавь `@userinfobot` в группу, напиши `/start`, скопируй ID, удали бота.
+**Как узнать GROUP_ID:**
+1. Добавь бота `@userinfobot` в свою группу
+2. Напиши в группе `/start`
+3. Он ответит ID группы — скопируй (число со знаком минус, например `-1009876543210`)
+4. Удали `@userinfobot` из группы
 
-Сохрани: `Ctrl+O`, `Enter`, `Ctrl+X`
+Сохрани файл: `Ctrl+O` → `Enter` → `Ctrl+X`
 
 ```bash
-# Защитить файл — только владелец может читать
+# Закрыть доступ к .env для посторонних
 chown ieltsbot:ieltsbot /opt/ielts-bot/.env
 chmod 600 /opt/ielts-bot/.env
 ```
 
 ---
 
-## Часть 8 — Настройка автозапуска через systemd
+## Часть 8 — Systemd сервис
 
 ```bash
-# Скопировать service-файл
 cp /opt/ielts-bot/ielts-bot.service /etc/systemd/system/
-
-# Перезагрузить конфиги systemd
 systemctl daemon-reload
-
-# Включить автозапуск при старте сервера
 systemctl enable ielts-bot
-
-# Запустить бота прямо сейчас
 systemctl start ielts-bot
 
 # Проверить статус
 systemctl status ielts-bot
 ```
 
-Если всё ОК, увидишь:
+Должно быть:
 ```
-● ielts-bot.service - IELTS Telegram Bot
-     Active: active (running) since ...
+Active: active (running)
 ```
-
----
-
-## Часть 9 — Проверка работы
 
 ```bash
 # Смотреть логи в реальном времени
 journalctl -u ielts-bot -f
-
-# Последние 50 строк логов
-journalctl -u ielts-bot -n 50
 ```
 
 В логах должно появиться:
@@ -202,101 +165,90 @@ journalctl -u ielts-bot -n 50
 INFO:aiogram.dispatcher:Start polling
 ```
 
-Отправь боту `/start` в Telegram — должен ответить.
-Отправь голосовое сообщение — через 15-30 секунд должна прийти оценка.
+---
+
+## Часть 9 — Бот в Telegram
+
+1. Добавь бота в свою группу
+2. Назначь бота **администратором** с правом **«Удаление сообщений»**
+3. Напиши боту в личку `/start`
+
+**Ожидаемое поведение:**
+- Если ты **администратор группы** → приветствие учителя с расширенным анализом
+- Если ты **участник группы** → приветствие ученика с базовой оценкой IELTS
+- Если тебя **нет в группе** → «Доступ закрыт»
+
+---
+
+## Часть 10 — Автоочистка аудиофайлов
+
+Бот удаляет файлы сам после каждого запроса, но для подстраховки — ночная очистка через cron:
+
+```bash
+chmod +x /opt/ielts-bot/cleanup_audio.sh
+crontab -u ieltsbot -e
+```
+
+Добавь строку (22:00 UTC = 03:00 по Ташкенту):
+
+```
+0 22 * * * VIDEO_SAVING_PATH=/opt/ielts-bot/savings /opt/ielts-bot/cleanup_audio.sh
+```
+
+Сохрани: `Ctrl+O` → `Enter` → `Ctrl+X`
+
+```bash
+# Проверить что добавилось
+crontab -u ieltsbot -l
+```
+
+---
+
+## Часть 11 — Файрвол
+
+```bash
+ufw allow OpenSSH
+ufw enable
+ufw status
+```
+
+Бот работает через исходящий HTTPS к Telegram и OpenAI — входящие порты не нужны.
+
+---
+
+## Обновление кода
+
+```bash
+systemctl stop ielts-bot
+
+su - ieltsbot
+cd /opt/ielts-bot
+git pull origin claude/fix-telegram-whisper-bugs-tze0T
+
+# Если добавились новые зависимости
+source venv/bin/activate
+pip install -r requirements.txt
+deactivate
+
+exit
+
+systemctl start ielts-bot
+journalctl -u ielts-bot -f
+```
 
 ---
 
 ## Управление ботом
 
 ```bash
-# Остановить бота
-systemctl stop ielts-bot
+systemctl stop ielts-bot       # остановить
+systemctl start ielts-bot      # запустить
+systemctl restart ielts-bot    # перезапустить
 
-# Перезапустить (например, после обновления кода)
-systemctl restart ielts-bot
-
-# Посмотреть статус
-systemctl status ielts-bot
-
-# Логи за сегодня
-journalctl -u ielts-bot --since today
+journalctl -u ielts-bot -f           # логи в реальном времени
+journalctl -u ielts-bot -n 50        # последние 50 строк
+journalctl -u ielts-bot --since today  # логи за сегодня
 ```
-
----
-
-## Обновление кода (если использовался Git)
-
-```bash
-su - ieltsbot
-cd /opt/ielts-bot
-git pull origin main
-exit
-
-# Перезапустить бота
-systemctl restart ielts-bot
-```
-
----
-
-## Обновление кода (если использовался scp)
-
-```bash
-# На локальном компьютере — загрузить новые файлы
-scp bot/bot.py root@164.90.xxx.xxx:/opt/ielts-bot/bot/
-scp chatgpt_api/gpt.py root@164.90.xxx.xxx:/opt/ielts-bot/chatgpt_api/
-
-# На сервере — перезапустить
-ssh root@164.90.xxx.xxx
-systemctl restart ielts-bot
-```
-
----
-
-## Часть 10 — Автоочистка аудиофайлов (03:00 по Ташкенту)
-
-Бот удаляет временные файлы сам после каждого запроса, но на случай сбоя —
-настроим ночную очистку через cron.
-
-```bash
-# Сделать скрипт исполняемым
-chmod +x /opt/ielts-bot/cleanup_audio.sh
-
-# Открыть crontab от имени пользователя ieltsbot
-crontab -u ieltsbot -e
-```
-
-Добавь строку (22:00 UTC = 03:00 Ташкент, UTC+5):
-
-```
-0 22 * * * VIDEO_SAVING_PATH=/opt/ielts-bot/savings /opt/ielts-bot/cleanup_audio.sh
-```
-
-Сохрани и выйди (`Ctrl+O`, `Enter`, `Ctrl+X` если nano).
-
-```bash
-# Проверить что задача добавилась
-crontab -u ieltsbot -l
-
-# Проверить логи очистки (появятся после первого запуска)
-grep "ielts-bot-cleanup" /var/log/syslog
-```
-
----
-
-## Настройка файрвола (опционально, но рекомендуется)
-
-```bash
-# Разрешить только SSH
-ufw allow OpenSSH
-ufw enable
-
-# Проверить
-ufw status
-```
-
-Бот работает через исходящие HTTPS-соединения к Telegram и OpenAI —
-входящие порты не нужны.
 
 ---
 
@@ -304,29 +256,21 @@ ufw status
 
 ### Бот не запускается
 ```bash
-# Смотри подробные логи
 journalctl -u ielts-bot -n 100 --no-pager
 ```
-
 Частые причины:
-- Неправильный `BOT_TOKEN` или `OPENAI_API_KEY` в `.env`
-- Не установлены зависимости (повтори Часть 6)
-- Ошибка в пути `VIDEO_SAVING_PATH` — убедись, что папка существует
+- Неверный `BOT_TOKEN` или `OPENAI_API_KEY` в `.env`
+- Не установлены зависимости → повтори Часть 6
+- Неверный `GROUP_ID` → должен быть со знаком минус
 
 ### FFmpeg не найден
 ```bash
-which ffmpeg      # должен вернуть /usr/bin/ffmpeg
-ffmpeg -version
-# Если не установлен:
+which ffmpeg        # должен вернуть /usr/bin/ffmpeg
 apt install -y ffmpeg
 ```
 
-### Нет прав на папку savings
-```bash
-ls -la /opt/ielts-bot/
-chown -R ieltsbot:ieltsbot /opt/ielts-bot/savings
-chmod 755 /opt/ielts-bot/savings
-```
+### Бот не реагирует на голосовые
+Убедись что `BOT_TOKEN` правильный, бот добавлен в группу и назначен администратором.
 
 ---
 
@@ -335,15 +279,21 @@ chmod 755 /opt/ielts-bot/savings
 ```
 /opt/ielts-bot/
 ├── bot/
-│   ├── bot.py
-│   ├── config.py
-│   └── savings/          ← голосовые файлы (создаётся автоматически)
+│   ├── __init__.py
+│   ├── bot.py           ← роутинг: приватный чат и группа
+│   ├── config.py        ← читает .env
+│   ├── locks.py         ← per-user очередь запросов
+│   ├── roles.py         ← определение роли пользователя
+│   └── handlers/
+│       ├── group.py     ← модерация группы
+│       ├── student.py   ← IELTS-оценка для учеников
+│       └── teacher.py   ← расширенный анализ для учителей
 ├── chatgpt_api/
 │   ├── __init__.py
-│   └── gpt.py
-├── venv/                  ← Python-окружение
-├── .env                   ← СЕКРЕТЫ (не в git!)
+│   └── gpt.py           ← Whisper + GPT-4o, два промпта
+├── venv/                ← Python-окружение (не в git)
+├── .env                 ← СЕКРЕТЫ (не в git!)
 ├── requirements.txt
-├── ielts-bot.service
-└── cleanup_audio.sh      ← запускается cron в 03:00 по Ташкенту
+├── ielts-bot.service    ← systemd
+└── cleanup_audio.sh     ← cron-очистка в 03:00 Ташкент
 ```
