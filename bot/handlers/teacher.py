@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import os
 import shutil
@@ -11,6 +12,8 @@ from bot.locks import get_user_lock
 from chatgpt_api.gpt import transcribe_audio, evaluate_ielts_teacher, split_message
 
 router = Router()
+
+os.makedirs(VIDEO_SAVING_PATH, exist_ok=True)
 
 FFMPEG = (
     shutil.which("ffmpeg")
@@ -46,10 +49,10 @@ async def teacher_voice(message: types.Message, bot: Bot):
 async def _process_voice(message: types.Message, bot: Bot):
     file = await bot.get_file(message.voice.file_id)
     user_id = message.from_user.id
-    unique_id = message.voice.file_id
+    safe_id = hashlib.md5(message.voice.file_id.encode()).hexdigest()[:12]
 
-    ogg_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{unique_id}.ogg")
-    mp3_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{unique_id}.mp3")
+    ogg_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{safe_id}.ogg")
+    mp3_path = os.path.join(VIDEO_SAVING_PATH, f"voice_{user_id}_{safe_id}.mp3")
 
     await bot.download_file(file.file_path, destination=ogg_path)
     logging.info(f"[teacher] Сохранён ogg: {ogg_path} ({os.path.getsize(ogg_path)} байт)")
