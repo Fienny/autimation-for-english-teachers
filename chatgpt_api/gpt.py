@@ -1,3 +1,5 @@
+import json
+
 from openai import AsyncOpenAI
 from bot.config import OPENAI_API_KEY
 
@@ -7,7 +9,7 @@ TG_LIMIT = 4096
 
 
 def split_message(text: str) -> list[str]:
-    """Split text into chunks that fit Telegram's 4096-char limit."""
+    """Split text into chunks fitting Telegram's 4096-char limit, breaking on newlines."""
     if len(text) <= TG_LIMIT:
         return [text]
     chunks = []
@@ -15,7 +17,6 @@ def split_message(text: str) -> list[str]:
         if len(text) <= TG_LIMIT:
             chunks.append(text)
             break
-        # Split at last newline before the limit
         split_at = text.rfind("\n", 0, TG_LIMIT)
         if split_at == -1:
             split_at = TG_LIMIT
@@ -23,33 +24,60 @@ def split_message(text: str) -> list[str]:
         text = text[split_at:].lstrip("\n")
     return chunks
 
-IELTS_PROMPT = """You are a certified IELTS Speaking examiner.
-You will receive a transcript of a candidate's spoken response. Your task is to evaluate it strictly according to official IELTS Speaking band descriptors.
-Be strict but fair. Do not inflate the score. Keep every section brief — 1–2 sentences max per point, no repetition.
-Assess the response using these 4 criteria:
-1. Fluency and Coherence
-2. Lexical Resource
-3. Grammatical Range and Accuracy
-4. Pronunciation (estimate based on transcript limitations)
-For each criterion:
-* Give a band score (0–9)
-* One sentence: key strength or weakness only
-Then:
-* Provide an overall band score (average, rounded to nearest 0.5)
-* List up to 3 specific mistakes with corrections
-* Give 2–3 actionable tips to improve the score
-Output format:
-Band Scores:
-* Fluency and Coherence: X.X — [one sentence]
-* Lexical Resource: X.X — [one sentence]
-* Grammatical Range and Accuracy: X.X — [one sentence]
-* Pronunciation: X.X — [one sentence]
-Overall Band: X.X
-Mistakes & Corrections:
-* Original → Corrected
-Advice:
-* [tip]
+
+# ---------------------------------------------------------------------------
+# Student prompt — от заказчика, без оценки произношения
+# ---------------------------------------------------------------------------
+
+IELTS_STUDENT_PROMPT = """Evaluate and provide feedback for the following IELTS speaking performance.
+
+Your feedback should be based on IELTS speaking criteria: grammar, lexical resources, how well the ideas are explained and expanded.
+
+Provide the feedback as follows:
+
+**Overview**
+Short but informative overview of the performance.
+
+**Grammar**
+3 most repeated grammar mistakes in the performance and how to correct them. Format each as:
+❌ [original] → ✅ [corrected]
+
+**Vocabulary**
+3 examples of words/collocations/phrases used incorrectly and what can be used instead. Format each as:
+❌ [used] → ✅ [better alternative]
+
+**Ideas**
+Direction on how to better develop ideas to improve the performance. Give examples of what the student can include to do better next time.
+
+**Improved Version**
+An improved version of the performance with all mistakes in grammar, vocabulary and idea development corrected.
+
 Now evaluate the following transcript:"""
+
+
+# ---------------------------------------------------------------------------
+# Teacher prompt — возвращает JSON с 5 секциями
+# ---------------------------------------------------------------------------
+
+IELTS_TEACHER_PROMPT = """You are a senior IELTS Speaking examiner reviewing a student's spoken response on behalf of their teacher.
+
+Return a valid JSON object with exactly these 5 keys. No markdown wrapping, no extra text — only the JSON.
+
+"overview": IELTS scores + 2-sentence evaluation summary. Format exactly:
+"• F&C: X.X | LR: X.X | GRA: X.X | Pronunciation: X.X\\n• Overall: X.X\\n\\n[2-sentence summary]"
+
+"authenticity": Two verdicts:
+"Read from notes/script: Yes/Likely/No — [brief reason]\\nAI-generated text: Yes/Likely/No — [brief reason]"
+
+"grammar": Top 3 grammar errors, each on its own line:
+"❌ [original] → ✅ [corrected] — [rule in 6 words max]"
+
+"vocabulary": Top 10 word/phrase misuses, each on its own line:
+"❌ [used] → ✅ [better] — [reason in 6 words max]"
+
+"ideas": 3–5 sentences: were ideas clear, supported with examples, logically structured? End with verdict: Weak / Developing / Adequate / Strong.
+
+Transcript to evaluate:"""
 
 
 async def transcribe_audio(mp3_path: str) -> str:
@@ -61,70 +89,35 @@ async def transcribe_audio(mp3_path: str) -> str:
     return result.text
 
 
-IELTS_TEACHER_PROMPT = """You are a senior IELTS Speaking examiner and language coach reviewing a student's spoken response on behalf of their teacher.
-
-Your job is to produce a compact but thorough report. Be direct and specific — no filler, no repetition.
-
-Output exactly the following sections (use the headers as shown):
-
-**IELTS Scores**
-• Fluency & Coherence: X.X
-• Lexical Resource: X.X
-• Grammatical Range & Accuracy: X.X
-• Pronunciation: X.X
-• **Overall: X.X**
-One sentence of justification per criterion max.
-
-**Authenticity Check**
-State clearly:
-• Read from notes/script? — Yes / Likely / No — brief reason (e.g. unnatural pace, lack of hesitation, too structured).
-• AI-generated text? — Yes / Likely / No — brief reason (e.g. overly formal register, unusual vocabulary for the level, suspiciously perfect grammar).
-
-**Top 3 Grammar Mistakes**
-List only the three most impactful recurring or serious errors.
-Format: ❌ Original → ✅ Corrected — rule violated in one line.
-
-**Top 10 Vocabulary Misuses**
-Only words the student used incorrectly or sub-optimally for this context.
-Format: ❌ used word → ✅ better alternative — one-line reason.
-
-**Idea Development**
-3–5 sentences max. Answer these specifically:
-– Were the main ideas clearly stated?
-– Were they supported with examples or elaboration?
-– Was the response easy to follow and logically structured?
-– Overall verdict: Weak / Developing / Adequate / Strong.
-
-Evaluate the following transcript:"""
-
-
 async def evaluate_ielts(transcript: str) -> str:
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": IELTS_PROMPT},
+            {"role": "system", "content": IELTS_STUDENT_PROMPT},
             {"role": "user", "content": transcript},
         ],
     )
     if not response.choices:
-        raise ValueError("OpenAI вернул пустой ответ (choices пустой)")
+        raise ValueError("OpenAI вернул пустой ответ")
     content = response.choices[0].message.content
     if not content or not content.strip():
         raise ValueError("OpenAI вернул пустое сообщение")
     return content
 
 
-async def evaluate_ielts_teacher(transcript: str) -> str:
+async def evaluate_ielts_teacher(transcript: str) -> dict:
+    """Returns a dict with keys: overview, authenticity, grammar, vocabulary, ideas."""
     response = await client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": IELTS_TEACHER_PROMPT},
             {"role": "user", "content": transcript},
         ],
+        response_format={"type": "json_object"},
     )
     if not response.choices:
-        raise ValueError("OpenAI вернул пустой ответ (choices пустой)")
+        raise ValueError("OpenAI вернул пустой ответ")
     content = response.choices[0].message.content
     if not content or not content.strip():
         raise ValueError("OpenAI вернул пустое сообщение")
-    return content
+    return json.loads(content)
