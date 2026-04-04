@@ -33,7 +33,7 @@ RU_BAD_WORDS: set[str] = {
     "пиздатый", "пиздануть", "пиздюк", "пиздюли",
     "хуй", "хуйня", "хуйло", "хуесос", "хуеплёт",
     "хуёвый", "нихуя", "похуй",
-    "сука", "суки", "сучка", "сучки",
+    "сука", "суки", "сучка", "сучки", "сцкан", "суккан",
     "мудак", "мудаки", "мудила",
     "залупа", "манда", "пёзда",
     "шлюха", "шлюхи",
@@ -41,12 +41,14 @@ RU_BAD_WORDS: set[str] = {
     "уёбок", "уёбки",
     "нахуй", "нахуя",
     "ёпт", "ёпть",
+    "гандон", "гандона", "гандоны",
+    "битч",
 }
 
 EN_BAD_WORDS: set[str] = {
     "fuck", "fucker", "fucking", "fucked", "fucks", "fuckin",
     "shit", "shits", "shitty", "bullshit",
-    "bitch", "bitches",
+    "bitch", "bitches", "bich",
     "asshole", "assholes",
     "bastard", "bastards",
     "cunt", "cunts",
@@ -58,31 +60,32 @@ EN_BAD_WORDS: set[str] = {
     "faggot", "faggots",
     "motherfucker", "motherfucking",
     "wanker", "twat", "slut", "prick",
+    "gandon", "gandona",
+    "suk", "sukа",
 }
 
 # Узбекский мат — кириллица
 UZ_CYR_BAD_WORDS: set[str] = {
-    "сика", "сикинг", "сикани",
+    "сика", "сикинг", "сикани", "сикай", "сикайди",
     "амак", "амаки", "амакинг",
     "ибн", "ибни", "ибнинг",
     "қурвой", "қурвоя", "қурвоялар",
     "ороспи", "оросди",
     "бузуқ", "бузуқи",
     "хает", "хаётингни",
-    "уят", "уятсиз",
     "қотоқ", "қотиқ",
-    "манқурт",
     "ахмоқ", "ахмоқлар",
     "тентак", "тентаклар",
     "ялангоч",
     "итнинг боласи", "ит боласи",
     "эшак", "эшакнинг",
     "чўчқа", "чўчқалар",
+    "гандон", "гандона",
 }
 
 # Узбекский мат — латиница
 UZ_LAT_BAD_WORDS: set[str] = {
-    "sika", "siking", "sikani",
+    "sika", "siking", "sikani", "sikay", "sikaydi",
     "amak", "amaki", "amaking",
     "ibn", "ibni", "ibning",
     "qurvoy", "qoʻtoʻs", "qotos",
@@ -96,6 +99,8 @@ UZ_LAT_BAD_WORDS: set[str] = {
     "itning bolasi", "it bolasi",
     "eshak", "eshaking",
     "choʻchqa", "chochqa",
+    "gandon", "gandona",
+    "boshinga", "kalvak",
 }
 
 ALL_BAD_WORDS = RU_BAD_WORDS | EN_BAD_WORDS | UZ_CYR_BAD_WORDS | UZ_LAT_BAD_WORDS
