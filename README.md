@@ -133,9 +133,19 @@ python -m bot.bot
 
 ### Windows
 
-**1. Установить Python 3.11+**
+> **Требование к версии Python: 3.11 или 3.12.**
+> Python 3.13+ не поддерживается зависимостями (pydantic-core не имеет готовых сборок).
+> Скачать нужную версию: [python.org/downloads](https://www.python.org/downloads/)
 
-Скачать с [python.org](https://www.python.org/downloads/). При установке поставить галочку **"Add Python to PATH"**.
+**1. Установить Python 3.11 или 3.12**
+
+На странице загрузки выбрать версию **3.11.x** или **3.12.x** → при установке поставить галочку **"Add Python to PATH"**.
+
+Проверить версию после установки:
+```powershell
+python --version
+# Должно быть Python 3.11.x или 3.12.x
+```
 
 **2. Установить ffmpeg**
 
@@ -151,37 +161,49 @@ where.exe ffmpeg
 
 Должен вернуть путь к ffmpeg.exe.
 
-**3. Клонировать репозиторий и создать окружение**
+**3. Клонировать репозиторий**
 
+Если репозиторий уже скачан — просто перейди в его папку:
+```powershell
+cd D:\asilbek_projects\automatization
+```
+
+Если клонируешь заново:
 ```powershell
 git clone <repo-url> ielts-bot
 cd ielts-bot
+```
 
+**4. Создать виртуальное окружение** (из корня проекта)
+
+```powershell
 python -m venv venv
 venv\Scripts\activate
 ```
 
-**4. Установить зависимости**
+> Важно: команды 4–7 выполнять **только из корня проекта** (там где `requirements.txt`), не заходя в `bot/` или другие подпапки.
+
+**5. Установить зависимости**
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-**5. Создать .env файл**
+**6. Создать .env файл**
 
 ```powershell
 copy .env.example .env
 ```
 
-Открыть `.env` в любом редакторе и заполнить ключи. Для `VIDEO_SAVING_PATH` указать папку для аудиофайлов в Windows-формате (папка создаётся автоматически при запуске):
+Открыть `.env` в редакторе и заполнить ключи. Для `VIDEO_SAVING_PATH` можно указать папку внутри проекта — она создастся автоматически:
 
 ```env
-VIDEO_SAVING_PATH=C:\ielts-bot\savings
+VIDEO_SAVING_PATH=savings
 ```
 
-> Можно указать любой путь, например внутри проекта: `D:\projects\ielts-bot\savings`
+> `savings` — относительный путь, папка создаётся рядом с проектом. Работает если запускать бота из корня проекта.
 
-**6. Запустить бота**
+**7. Запустить бота**
 
 ```powershell
 python -m bot.bot
