@@ -61,12 +61,16 @@ Telegram-бот для автоматической оценки устной р
 ## Структура проекта
 
 ```
-ielts-bot/
+<папка-проекта>/
 ├── bot/
+│   ├── __init__.py
 │   ├── bot.py              # Роутинг: личный чат (роль) и группа (модерация)
+│   ├── cache.py            # TTL-кэш в памяти + отложенное удаление файлов
 │   ├── config.py           # Конфигурация (читает переменные окружения)
+│   ├── locks.py            # Per-user очередь запросов
 │   ├── roles.py            # Определение роли пользователя (teacher / student / outsider)
 │   └── handlers/
+│       ├── __init__.py
 │       ├── student.py      # Обработчик для учеников: IELTS-оценка
 │       ├── teacher.py      # Обработчик для учителей: расширенный анализ
 │       └── group.py        # Модерация группы: мат, ссылки, флуд, дубли
@@ -77,6 +81,7 @@ ielts-bot/
 ├── .gitignore
 ├── requirements.txt        # Python-зависимости
 ├── ielts-bot.service       # systemd-юнит для автозапуска на сервере
+├── cleanup_audio.sh        # Cron-скрипт для очистки старых аудиофайлов
 ├── README.md
 ├── DEPLOY.md               # Инструкция по деплою на DigitalOcean
 └── TESTING.md              # Руководство по тестированию
@@ -104,8 +109,8 @@ GROUP_ID=-1001234567890                  # ID группы (учителя = adm
 ### Linux / macOS
 
 ```bash
-# 1. Клонировать репозиторий
-git clone <repo-url>
+# 1. Клонировать репозиторий (папка создаётся с именем ielts-bot)
+git clone <repo-url> ielts-bot
 cd ielts-bot
 
 # 2. Создать виртуальное окружение
@@ -149,7 +154,7 @@ where.exe ffmpeg
 **3. Клонировать репозиторий и создать окружение**
 
 ```powershell
-git clone <repo-url>
+git clone <repo-url> ielts-bot
 cd ielts-bot
 
 python -m venv venv
@@ -168,11 +173,13 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Открыть `.env` в любом редакторе и заполнить ключи. Для `VIDEO_SAVING_PATH` указать папку в Windows-формате:
+Открыть `.env` в любом редакторе и заполнить ключи. Для `VIDEO_SAVING_PATH` указать папку для аудиофайлов в Windows-формате (папка создаётся автоматически при запуске):
 
 ```env
-VIDEO_SAVING_PATH=C:\Users\<имя>\ielts-savings
+VIDEO_SAVING_PATH=C:\ielts-bot\savings
 ```
+
+> Можно указать любой путь, например внутри проекта: `D:\projects\ielts-bot\savings`
 
 **6. Запустить бота**
 
