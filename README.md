@@ -101,6 +101,8 @@ GROUP_ID=-1001234567890                  # ID группы (учителя = adm
 
 ## Локальный запуск (для разработки)
 
+### Linux / macOS
+
 ```bash
 # 1. Клонировать репозиторий
 git clone <repo-url>
@@ -121,6 +123,60 @@ cp .env.example .env
 ffmpeg -version
 
 # 6. Запустить бота
+python -m bot.bot
+```
+
+### Windows
+
+**1. Установить Python 3.11+**
+
+Скачать с [python.org](https://www.python.org/downloads/). При установке поставить галочку **"Add Python to PATH"**.
+
+**2. Установить ffmpeg**
+
+```powershell
+winget install ffmpeg
+```
+
+После установки **перезапустить терминал**, затем проверить:
+
+```powershell
+where.exe ffmpeg
+```
+
+Должен вернуть путь к ffmpeg.exe.
+
+**3. Клонировать репозиторий и создать окружение**
+
+```powershell
+git clone <repo-url>
+cd ielts-bot
+
+python -m venv venv
+venv\Scripts\activate
+```
+
+**4. Установить зависимости**
+
+```powershell
+pip install -r requirements.txt
+```
+
+**5. Создать .env файл**
+
+```powershell
+copy .env.example .env
+```
+
+Открыть `.env` в любом редакторе и заполнить ключи. Для `VIDEO_SAVING_PATH` указать папку в Windows-формате:
+
+```env
+VIDEO_SAVING_PATH=C:\Users\<имя>\ielts-savings
+```
+
+**6. Запустить бота**
+
+```powershell
 python -m bot.bot
 ```
 
