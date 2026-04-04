@@ -109,9 +109,10 @@ GROUP_ID=-1001234567890                  # ID группы (учителя = adm
 ### Linux / macOS
 
 ```bash
-# 1. Клонировать репозиторий (папка создаётся с именем ielts-bot)
-git clone <repo-url> ielts-bot
-cd ielts-bot
+# 1. Клонировать репозиторий
+# git создаёт папку autimation-for-english-teachers (имя репозитория)
+git clone <repo-url>
+cd autimation-for-english-teachers
 
 # 2. Создать виртуальное окружение
 python3 -m venv venv
@@ -161,18 +162,15 @@ where.exe ffmpeg
 
 Должен вернуть путь к ffmpeg.exe.
 
-**3. Клонировать репозиторий**
+**3. Перейти в папку репозитория**
 
-Если репозиторий уже скачан — просто перейди в его папку:
+После клонирования git создаёт папку с именем репозитория — `autimation-for-english-teachers`:
+
 ```powershell
-cd D:\asilbek_projects\automatization
+cd autimation-for-english-teachers
 ```
 
-Если клонируешь заново:
-```powershell
-git clone <repo-url> ielts-bot
-cd ielts-bot
-```
+Если репозиторий уже был скачан раньше, перейди в его корень (там где лежит `requirements.txt`).
 
 **4. Создать виртуальное окружение** (из корня проекта)
 
