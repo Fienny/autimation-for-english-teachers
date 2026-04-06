@@ -1,15 +1,10 @@
 """
 Модерация группы:
   - Мат (русский + английский + узбекский кириллица/латиница)
-  - Ссылки от не-админов
-  - Флуд: >5 сообщений за 10 секунд
-  - Дубли: одинаковый текст 2 раза подряд
   Нарушителя баним, пишем в чат причину.
 """
 import logging
 import re
-import time
-from collections import deque
 
 from aiogram import Bot, Router, types
 from aiogram.enums import ChatMemberStatus
@@ -105,20 +100,6 @@ UZ_LAT_BAD_WORDS: set[str] = {
 
 ALL_BAD_WORDS = RU_BAD_WORDS | EN_BAD_WORDS | UZ_CYR_BAD_WORDS | UZ_LAT_BAD_WORDS
 
-# ---------------------------------------------------------------------------
-# Regex для ссылок
-# ---------------------------------------------------------------------------
-URL_RE = re.compile(r"(https?://|www\.|t\.me/|tg://|@\w{3,})", re.IGNORECASE)
-
-# ---------------------------------------------------------------------------
-# Состояние (in-memory)
-# ---------------------------------------------------------------------------
-FLOOD_MAX = 5
-FLOOD_WINDOW = 10
-
-_flood_data: dict[int, deque] = {}
-_last_msg: dict[int, str] = {}
-
 
 # ---------------------------------------------------------------------------
 # Проверки
@@ -136,27 +117,6 @@ def _contains_profanity(text: str) -> bool:
     normalized = _normalize(text)
     words = re.split(r"[\s\W]+", normalized)
     return any(w in ALL_BAD_WORDS for w in words if w)
-
-
-def _contains_link(text: str) -> bool:
-    return bool(URL_RE.search(text))
-
-
-def _is_flood(user_id: int) -> bool:
-    now = time.monotonic()
-    if user_id not in _flood_data:
-        _flood_data[user_id] = deque()
-    dq = _flood_data[user_id]
-    dq.append(now)
-    while dq and dq[0] < now - FLOOD_WINDOW:
-        dq.popleft()
-    return len(dq) > FLOOD_MAX
-
-
-def _is_duplicate(user_id: int, text: str) -> bool:
-    prev = _last_msg.get(user_id)
-    _last_msg[user_id] = text
-    return prev is not None and prev.strip().lower() == text.strip().lower()
 
 
 async def _is_admin(bot: Bot, chat_id: int, user_id: int) -> bool:
@@ -205,16 +165,4 @@ async def moderate(message: types.Message, bot: Bot) -> None:
 
     if text and _contains_profanity(text):
         await _ban(bot, message, "мат")
-        return
-
-    if text and _contains_link(text):
-        await _ban(bot, message, "ссылки запрещены")
-        return
-
-    if _is_flood(user_id):
-        await _ban(bot, message, "флуд")
-        return
-
-    if text and _is_duplicate(user_id, text):
-        await _ban(bot, message, "спам")
         return
