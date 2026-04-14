@@ -29,30 +29,46 @@ def split_message(text: str) -> list[str]:
 # Student prompt — от заказчика, без оценки произношения
 # ---------------------------------------------------------------------------
 
-IELTS_STUDENT_PROMPT = """Evaluate and provide feedback for the following IELTS speaking performance.
+IELTS_STUDENT_PROMPT = """Evaluate and provide detailed feedback for the following IELTS Speaking performance.
+Your evaluation should follow official IELTS Speaking criteria:
+Fluency & Coherence
+Lexical Resource
+Grammatical Range & Accuracy
+(Pronunciation if inferable from transcript)
 
-Your feedback should be based on IELTS speaking criteria: grammar, lexical resources, how well the ideas are explained and expanded.
-
-Provide the feedback as follows:
+Provide feedback in the following structure:
 
 **Overview**
-Short but informative overview of the performance.
+Give a short but informative summary of the performance
+
+**Fluency & Coherence**
+Comment on:
+Flow of speech
+Use of linking words
+Logical organization of ideas
 
 **Grammar**
-3 most repeated grammar mistakes in the performance and how to correct them. Format each as:
+Identify the 3 most frequent or serious grammar error types (e.g., tense, articles, prepositions, sentence structure). Ignore punctuation/spelling.
+Format each as:
 ❌ [original] → ✅ [corrected]
 
 **Vocabulary**
-3 examples of words/collocations/phrases used incorrectly and what can be used instead. Format each as:
+Provide:
+3 examples of incorrect or unnatural word usage (only if present) with better alternatives
+Format:
 ❌ [used] → ✅ [better alternative]
+Brief comment on vocabulary range and appropriateness
 
 **Ideas**
-Direction on how to better develop ideas to improve the performance. Give examples of what the student can include to do better next time.
+Explain how the student can better develop and expand their answers.
+Provide specific strategies (e.g., examples, reasons, comparisons, personal experiences) and give sample improvements.
 
 **Improved Version**
-An improved version of the performance with all mistakes in grammar, vocabulary and idea development corrected.
+Rewrite the response:
+Keeping the original meaning as much as possible
+Improving grammar, vocabulary, and idea development
 
-Now evaluate the following transcript:"""
+Transcript:
 
 
 # ---------------------------------------------------------------------------
@@ -60,22 +76,27 @@ Now evaluate the following transcript:"""
 # ---------------------------------------------------------------------------
 
 IELTS_TEACHER_PROMPT = """You are a senior IELTS Speaking examiner reviewing a student's spoken response on behalf of their teacher.
-
-Return a valid JSON object with exactly these 5 keys. No markdown wrapping, no extra text — only the JSON.
+Return a valid JSON object with exactly these 5 keys. No markdown, no explanations — only the JSON.
+Ensure:
+Scores are in full bands only (e.g., 6.0, 7.0), rounded to nearest band
+Overall score is consistent with the four criteria (approximate average) rounded to nearest full band.
+Output is valid JSON with properly escaped newlines (\\n) and no trailing commas
 
 "overview": IELTS scores + 2-sentence evaluation summary. Format exactly:
 "• F&C: X.X | LR: X.X | GRA: X.X | Pronunciation: X.X\\n• Overall: X.X\\n\\n[2-sentence summary]"
 
-"authenticity": Two verdicts:
+"authenticity": Two verdicts based only on linguistic evidence (do not guess):
 "Read from notes/script: Yes/Likely/No — [brief reason]\\nAI-generated text: Yes/Likely/No — [brief reason]"
 
-"grammar": Top 3 grammar errors, each on its own line:
+"grammar": 3 recurring grammar error patterns, not isolated mistakes (e.g., tense, articles, prepositions, sentence structure). Ignore punctuation/spelling. Each on its own line:
 "❌ [original] → ✅ [corrected] — [rule in 6 words max]"
 
-"vocabulary": Top 10 word/phrase misuses, each on its own line:
+"vocabulary": Top 10 word/phrase/collocation misuses (only if present). Each on its own line:
 "❌ [used] → ✅ [better] — [reason in 6 words max]"
 
-"ideas": 3–5 sentences: were ideas clear, supported with examples, logically structured? End with verdict: Weak / Developing / Adequate / Strong.
+"ideas": 3–5 sentences evaluating clarity, support, and structure.
+If fluency cannot be directly observed, infer cautiously.
+End with verdict: Weak / Developing / Adequate / Strong.
 
 Transcript to evaluate:"""
 

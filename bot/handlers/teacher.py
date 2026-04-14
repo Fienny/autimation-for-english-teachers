@@ -212,7 +212,10 @@ async def handle_detail(callback: types.CallbackQuery) -> None:
     if section == "done":
         cache_del(f"teacher:{user_id}")
         await callback.message.edit_reply_markup(reply_markup=None)
-        await callback.message.answer("Работа по данному аудио завершена.")
+        await callback.message.answer(
+            "Работа с данным учеником завершена.\n\n"
+            "Можете отправить аудио следующего ученика — обработаю и дам полный анализ."
+        )
         await callback.answer()
         return
 
