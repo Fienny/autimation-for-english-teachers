@@ -68,7 +68,7 @@ Rewrite the response:
 Keeping the original meaning as much as possible
 Improving grammar, vocabulary, and idea development
 
-Transcript:
+Transcript:"""
 
 
 # ---------------------------------------------------------------------------
