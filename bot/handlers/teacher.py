@@ -228,8 +228,8 @@ async def handle_detail(callback: types.CallbackQuery) -> None:
         return
 
     section_text = data.get(section)
-    if not section_text:
-        await callback.answer("Раздел не найден.", show_alert=True)
+    if not section_text or not str(section_text).strip():
+        await callback.answer("В этом разделе замечаний нет.", show_alert=True)
         return
 
     label = SECTION_LABELS.get(section, section)

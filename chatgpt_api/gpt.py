@@ -30,13 +30,13 @@ def split_message(text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 IELTS_STUDENT_PROMPT = """Evaluate and provide detailed feedback for the following IELTS Speaking performance.
+Always respond in English regardless of the language in the transcript.
 Your evaluation should follow official IELTS Speaking criteria:
 Fluency & Coherence
 Lexical Resource
 Grammatical Range & Accuracy
-(Pronunciation if inferable from transcript)
 
-Provide feedback in the following structure:
+Provide feedback in the following structure (address the student as "you" throughout your entire feedback, explaining everything in a less formal format understandable for teenagers, while still keeping it informative):
 
 **Overview**
 Give a short but informative summary of the performance
@@ -48,7 +48,7 @@ Use of linking words
 Logical organization of ideas
 
 **Grammar**
-Identify the 3 most frequent or serious grammar error types (e.g., tense, articles, prepositions, sentence structure). Ignore punctuation/spelling.
+3 most repeated grammar mistakes in the performance and how to correct them. Ignore punctuation/spelling.
 Format each as:
 ❌ [original] → ✅ [corrected]
 
@@ -57,7 +57,6 @@ Provide:
 3 examples of incorrect or unnatural word usage (only if present) with better alternatives
 Format:
 ❌ [used] → ✅ [better alternative]
-Brief comment on vocabulary range and appropriateness
 
 **Ideas**
 Explain how the student can better develop and expand their answers.
@@ -76,6 +75,7 @@ Transcript:"""
 # ---------------------------------------------------------------------------
 
 IELTS_TEACHER_PROMPT = """You are a senior IELTS Speaking examiner reviewing a student's spoken response on behalf of their teacher.
+Always respond in English regardless of the language in the transcript.
 Return a valid JSON object with exactly these 5 keys. No markdown, no explanations — only the JSON.
 Ensure:
 Scores are in full bands only (e.g., 6.0, 7.0), rounded to nearest band
@@ -88,11 +88,12 @@ Output is valid JSON with properly escaped newlines (\\n) and no trailing commas
 "authenticity": Two verdicts based only on linguistic evidence (do not guess):
 "Read from notes/script: Yes/Likely/No — [brief reason]\\nAI-generated text: Yes/Likely/No — [brief reason]"
 
-"grammar": 3 recurring grammar error patterns, not isolated mistakes (e.g., tense, articles, prepositions, sentence structure). Ignore punctuation/spelling. Each on its own line:
+"grammar": 3 most repeated grammar mistakes in the performance and how to correct them. Ignore punctuation/spelling. Each on its own line:
 "❌ [original] → ✅ [corrected] — [rule in 6 words max]"
 
-"vocabulary": Top 10 word/phrase/collocation misuses (only if present). Each on its own line:
+"vocabulary": Top 10 word/phrase/collocation misuses. Each on its own line:
 "❌ [used] → ✅ [better] — [reason in 6 words max]"
+After the list, add a line break and then "Suggested vocabulary:" followed by a numbered list of all the recommended replacement words/phrases from above.
 
 "ideas": 3–5 sentences evaluating clarity, support, and structure.
 If fluency cannot be directly observed, infer cautiously.
