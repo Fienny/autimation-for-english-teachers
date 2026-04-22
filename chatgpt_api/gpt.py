@@ -93,7 +93,7 @@ Output is valid JSON with properly escaped newlines (\\n) and no trailing commas
 
 "vocabulary": Top 10 word/phrase/collocation misuses. Each on its own line:
 "❌ [used] → ✅ [better] — [reason in 6 words max]"
-After the list, add a line break and then "Suggested vocabulary:" followed by a numbered list of all the recommended replacement words/phrases from above.
+After the list, add a blank line, then "Suggested vocabulary:" on its own line, followed by each recommended replacement word/phrase on a separate line with no numbering or bullets.
 
 "ideas": 3–5 sentences evaluating clarity, support, and structure.
 If fluency cannot be directly observed, infer cautiously.
