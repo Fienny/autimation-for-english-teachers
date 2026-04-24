@@ -233,7 +233,15 @@ async def handle_detail(callback: types.CallbackQuery) -> None:
         return
 
     label = SECTION_LABELS.get(section, section)
-    for chunk in split_message(f"*{label}*\n\n{section_text}"):
-        await callback.message.answer(chunk, parse_mode="Markdown")
+
+    if section == "vocabulary" and "Suggested vocabulary:" in section_text:
+        main_part, _, vocab_list = section_text.partition("Suggested vocabulary:")
+        for chunk in split_message(f"*{label}*\n\n{main_part.strip()}"):
+            await callback.message.answer(chunk, parse_mode="Markdown")
+        if vocab_list.strip():
+            await callback.message.answer(vocab_list.strip())
+    else:
+        for chunk in split_message(f"*{label}*\n\n{section_text}"):
+            await callback.message.answer(chunk, parse_mode="Markdown")
 
     await callback.answer()
