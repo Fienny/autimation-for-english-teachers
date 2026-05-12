@@ -1,52 +1,92 @@
-import logging
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
 import asyncio
-from datetime import datetime
-from whisper_ai_api.whisper import get_whisper_response
-from bot.config import BOT_TOKEN, MY_CHAT_ID, VIDEO_SAVING_PATH
+import logging
 
-# basic logging
+from aiogram import Bot, Dispatcher, F, Router, types
+from aiogram.filters import Command
+
+from bot.config import BOT_TOKEN, GROUP_ID
+from bot.roles import get_user_role
+from bot.handlers import student, teacher, group
+
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# temp send hello func - handles onlty given commands
-@dp.message(Command('start', 'help'))
-async def send_welcome(message: types.Message):
-    await message.reply("Hi!\nI'm temp bot's message")
+# ---------------------------------------------------------------------------
+# Роутер для личных сообщений
+# ---------------------------------------------------------------------------
+private_router = Router()
+private_router.message.filter(F.chat.type == "private")
 
-# Circle video saving
-@dp.message()
-async def save_circle(message: types.Message, bot: Bot):
-    if message.voice:
-        file = await bot.get_file(message.voice.file_id)
-        
-        date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        user_id = message.from_user.id
-        new_name = f"voice_{user_id}_{date_str}.mp3" # для голоса лучше .ogg или .mp3
-        
-        #saving
-        await bot.download_file(
-            file.file_path,
-            destination=f"{VIDEO_SAVING_PATH}/{new_name}"
+
+@private_router.message(Command("start", "help"))
+async def private_start(message: types.Message) -> None:
+    role = await get_user_role(bot, message.from_user.id)
+    if role == "outsider":
+        await message.answer(
+            "Доступ закрыт.\n"
+            "Ты должен состоять в группе, которую обслуживает этот бот."
         )
-        path = f"{VIDEO_SAVING_PATH}/{new_name}"    
-        await message.answer("The voice is saved!")
+        return
+    if role == "teacher":
+        await teacher.teacher_start(message)
+    else:
+        await student.student_start(message)
 
-        result = await get_whisper_response(path)
 
-        await message.answer(str(result))
+@private_router.message()
+async def private_message(message: types.Message) -> None:
+    role = await get_user_role(bot, message.from_user.id)
+    if role == "outsider":
+        await message.answer(
+            "Доступ закрыт.\n"
+            "Ты должен состоять в группе, которую обслуживает этот бот."
+        )
+        return
+    if role == "teacher":
+        await teacher.teacher_voice(message, bot)
+    else:
+        await student.student_voice(message, bot)
 
-# # temp send message to any command or message (echo)
-# @dp.message()
-# async def echo(message: types.Message):
-#     await message.answer(message.text)
 
-async def main():
+# ---------------------------------------------------------------------------
+# Callback: кнопка "Проверить работу" из /start
+# ---------------------------------------------------------------------------
+
+@private_router.callback_query(F.data == "start_check")
+async def on_start_check(callback: types.CallbackQuery) -> None:
+    role = await get_user_role(bot, callback.from_user.id)
+    if role == "teacher":
+        await callback.message.answer(
+            "Отправь голосовое сообщение ученика — обработаю и дам полный анализ.\n"
+            "Можно отправить несколько аудио подряд: подожду 30 секунд и обработаю всё вместе."
+        )
+    else:
+        await callback.message.answer(
+            "Отправь голосовое сообщение на английском — получишь фидбек по IELTS."
+        )
+    await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Роутер для группы
+# ---------------------------------------------------------------------------
+group_router = Router()
+group_router.message.filter(F.chat.id == GROUP_ID)
+group_router.include_router(group.router)
+
+# ---------------------------------------------------------------------------
+# Регистрация роутеров
+# ---------------------------------------------------------------------------
+dp.include_router(private_router)
+dp.include_router(teacher.callback_router)  # callback-кнопки учителя
+dp.include_router(group_router)
+
+
+async def main() -> None:
     await dp.start_polling(bot, skip_updates=True)
 
-# Loop polling
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     asyncio.run(main())

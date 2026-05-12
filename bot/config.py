@@ -1,3 +1,12 @@
-BOT_TOKEN = "8716627566:AAHetGZWlAt4JModw8xJKtP97twofihhxBE"
-MY_CHAT_ID = 266889430
-VIDEO_SAVING_PATH = r"D:\asilbek_projects\automatization\bot\savings"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+VIDEO_SAVING_PATH = os.getenv("VIDEO_SAVING_PATH", "/opt/ielts-bot/savings")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GROUP_ID = int(os.getenv("GROUP_ID", "0"))
+
+# Создаём папку для аудиофайлов при старте, если её нет
+os.makedirs(VIDEO_SAVING_PATH, exist_ok=True)

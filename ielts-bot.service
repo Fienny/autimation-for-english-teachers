@@ -1,0 +1,17 @@
+[Unit]
+Description=IELTS Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ieltsbot
+WorkingDirectory=/opt/ielts-bot
+EnvironmentFile=/opt/ielts-bot/.env
+ExecStart=/opt/ielts-bot/venv/bin/python -m bot.bot
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

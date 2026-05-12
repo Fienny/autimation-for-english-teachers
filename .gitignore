@@ -1,0 +1,36 @@
+# Секреты — НИКОГДА не коммитить
+.env
+
+# Голосовые файлы пользователей
+bot/savings/
+savings/
+*.ogg
+*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
