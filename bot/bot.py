@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import Command
 
-from bot.config import BOT_TOKEN, GROUP_ID
+from bot.config import BOT_TOKEN, GROUP_IDS
 from bot.roles import get_user_role
 from bot.handlers import student, teacher, group
 
@@ -73,7 +73,7 @@ async def on_start_check(callback: types.CallbackQuery) -> None:
 # Роутер для группы
 # ---------------------------------------------------------------------------
 group_router = Router()
-group_router.message.filter(F.chat.id == GROUP_ID)
+group_router.message.filter(F.chat.id.in_(GROUP_IDS))
 group_router.include_router(group.router)
 
 # ---------------------------------------------------------------------------
