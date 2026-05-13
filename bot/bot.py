@@ -22,7 +22,7 @@ private_router.message.filter(F.chat.type == "private")
 
 @private_router.message(Command("start", "help"))
 async def private_start(message: types.Message) -> None:
-    role = await get_user_role(bot, message.from_user.id)
+    role = await get_user_role(bot, message.from_user.id, context="private_start")
     if role == "outsider":
         await message.answer(
             "Доступ закрыт.\n"
@@ -37,7 +37,7 @@ async def private_start(message: types.Message) -> None:
 
 @private_router.message()
 async def private_message(message: types.Message) -> None:
-    role = await get_user_role(bot, message.from_user.id)
+    role = await get_user_role(bot, message.from_user.id, context="private_message")
     if role == "outsider":
         await message.answer(
             "Доступ закрыт.\n"
@@ -56,7 +56,7 @@ async def private_message(message: types.Message) -> None:
 
 @private_router.callback_query(F.data == "start_check")
 async def on_start_check(callback: types.CallbackQuery) -> None:
-    role = await get_user_role(bot, callback.from_user.id)
+    role = await get_user_role(bot, callback.from_user.id, context="start_check_callback")
     if role == "teacher":
         await callback.message.answer(
             "Отправь голосовое сообщение ученика — обработаю и дам полный анализ.\n"
@@ -84,6 +84,7 @@ dp.include_router(group_router)
 
 
 async def main() -> None:
+    log_config_summary()
     await dp.start_polling(bot, skip_updates=True)
 
 

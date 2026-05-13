@@ -1,9 +1,14 @@
+import logging
+
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 from bot.config import GROUP_IDS
 
+def _status_to_text(status: object) -> str:
+    return status.value if hasattr(status, "value") else str(status)
 
-async def get_user_role(bot: Bot, user_id: int) -> str:
+
+async def get_user_role(bot: Bot, user_id: int, context: str = "access-check") -> str:
     """
     Возвращает роль пользователя в любой разрешённой группе:
       'teacher'  — creator или administrator хотя бы в одной группе
