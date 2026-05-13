@@ -79,15 +79,19 @@ OPENAI_API_KEY=sk-your_openai_api_key
 VIDEO_SAVING_PATH=savings
 
 # Use GROUP_ID for one group, or GROUP_IDS for several groups.
+# ALLOWED_GROUP_IDS is also accepted as an optional alias.
 GROUP_ID=-1001234567890
 GROUP_IDS=-1001234567890,-1002345678901,-1003456789012
+# ALLOWED_GROUP_IDS=-1001234567890,-1002345678901,-1003456789012
 ```
 
 Notes:
 
 - `GROUP_ID` is kept for backward compatibility.
 - `GROUP_IDS` is comma-separated and is the preferred option for multiple groups.
-- If both are set, the bot allows access through all IDs from both variables.
+- `ALLOWED_GROUP_IDS` is accepted as an optional alias for deployments that already use that name.
+- If several variables are set, the bot combines all IDs and removes duplicates.
+- On startup, the bot logs the loaded group ID values and the effective group list, but never logs `BOT_TOKEN` or `OPENAI_API_KEY`.
 - `VIDEO_SAVING_PATH=savings` is safe for local testing; the app creates the folder automatically.
 
 ---
@@ -225,6 +229,8 @@ Expected terminal behavior:
 
 - The process keeps running.
 - Logs appear in the terminal.
+- Startup logs include a line like `Group access config loaded: ... effective_group_ids=[...], VIDEO_SAVING_PATH='savings'`.
+- This log should show your `GROUP_IDS` values. It must not show `BOT_TOKEN` or `OPENAI_API_KEY`.
 - Press `Ctrl+C` to stop it.
 
 If Telegram reports that another `getUpdates` request is running, stop all other bot processes and wait a few seconds, then run again.
