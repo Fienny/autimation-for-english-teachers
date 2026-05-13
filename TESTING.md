@@ -16,8 +16,16 @@
 
 ### 1.2 Узнать ID группы
 
-Добавь в группу бота `@userinfobot`, напиши `/start` — он покажет ID группы (число вида `-1009876543210`).
-После этого можно удалить `@userinfobot` из группы.
+Рекомендуемый способ без helper-ботов описан в **[local.md](./local.md)**: добавь своего бота в группу, отправь новое сообщение и прочитай `chat.id` через Telegram Bot API `getUpdates`.
+
+Кратко:
+
+```bash
+curl "https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook?drop_pending_updates=true"
+curl "https://api.telegram.org/bot<BOT_TOKEN>/getUpdates"
+```
+
+В ответе найди объект `chat` с `type: "group"` или `type: "supergroup"` и скопируй его `id`, например `-1009876543210`.
 
 ### 1.3 Прописать GROUP_ID в .env
 
