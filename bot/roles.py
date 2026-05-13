@@ -1,27 +1,31 @@
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest
-from bot.config import GROUP_ID
+from aiogram.exceptions import TelegramAPIError
+from bot.config import GROUP_IDS
 
 
 async def get_user_role(bot: Bot, user_id: int) -> str:
     """
-    Возвращает роль пользователя в группе GROUP_ID:
-      'teacher'  — creator или administrator
-      'student'  — рядовой участник
-      'outsider' — не состоит в группе
+    Возвращает роль пользователя в любой разрешённой группе:
+      'teacher'  — creator или administrator хотя бы в одной группе
+      'student'  — рядовой участник хотя бы в одной группе
+      'outsider' — не состоит ни в одной разрешённой группе
     """
-    if not GROUP_ID:
+    if not GROUP_IDS:
         return "outsider"
 
-    try:
-        member = await bot.get_chat_member(GROUP_ID, user_id)
-    except TelegramBadRequest:
-        return "outsider"
+    is_student = False
 
-    status = member.status.value if hasattr(member.status, "value") else str(member.status)
+    for group_id in GROUP_IDS:
+        try:
+            member = await bot.get_chat_member(group_id, user_id)
+        except TelegramAPIError:
+            continue
 
-    if status in ("creator", "administrator"):
-        return "teacher"
-    if status in ("member", "restricted"):
-        return "student"
-    return "outsider"
+        status = member.status.value if hasattr(member.status, "value") else str(member.status)
+
+        if status in ("creator", "administrator"):
+            return "teacher"
+        if status in ("member", "restricted"):
+            is_student = True
+
+    return "student" if is_student else "outsider"

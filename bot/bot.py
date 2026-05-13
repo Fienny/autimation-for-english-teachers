@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import Command
 
-from bot.config import BOT_TOKEN, GROUP_ID
+from bot.config import BOT_TOKEN, GROUP_IDS
 from bot.roles import get_user_role
 from bot.handlers import student, teacher, group
 
@@ -63,9 +63,7 @@ async def on_start_check(callback: types.CallbackQuery) -> None:
             "Можно отправить несколько аудио подряд: подожду 30 секунд и обработаю всё вместе."
         )
     else:
-        await callback.message.answer(
-            "Отправь голосовое сообщение на английском — получишь фидбек по IELTS."
-        )
+        await student.student_start(callback.message, callback.from_user.id)
     await callback.answer()
 
 
@@ -73,13 +71,14 @@ async def on_start_check(callback: types.CallbackQuery) -> None:
 # Роутер для группы
 # ---------------------------------------------------------------------------
 group_router = Router()
-group_router.message.filter(F.chat.id == GROUP_ID)
+group_router.message.filter(F.chat.id.in_(GROUP_IDS))
 group_router.include_router(group.router)
 
 # ---------------------------------------------------------------------------
 # Регистрация роутеров
 # ---------------------------------------------------------------------------
 dp.include_router(private_router)
+dp.include_router(student.callback_router)  # callback-кнопки ученика
 dp.include_router(teacher.callback_router)  # callback-кнопки учителя
 dp.include_router(group_router)
 
