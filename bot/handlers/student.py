@@ -108,7 +108,7 @@ def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
 
 
 async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
-    role = await get_user_role(bot, callback.from_user.id, context="student_callback")
+    role = await get_user_role(bot, callback.from_user.id)
     if role != "student":
         await callback.answer("Доступно только ученикам.", show_alert=True)
         return False

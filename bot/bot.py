@@ -4,7 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import Command
 
-from bot.config import BOT_TOKEN, GROUP_IDS, log_config_summary
+from bot.config import BOT_TOKEN, GROUP_IDS
 from bot.roles import get_user_role
 from bot.handlers import student, teacher, group
 
