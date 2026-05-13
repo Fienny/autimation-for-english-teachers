@@ -63,9 +63,7 @@ async def on_start_check(callback: types.CallbackQuery) -> None:
             "Можно отправить несколько аудио подряд: подожду 30 секунд и обработаю всё вместе."
         )
     else:
-        await callback.message.answer(
-            "Отправь голосовое сообщение на английском — получишь фидбек по IELTS."
-        )
+        await student.student_start(callback.message, callback.from_user.id)
     await callback.answer()
 
 
@@ -80,6 +78,7 @@ group_router.include_router(group.router)
 # Регистрация роутеров
 # ---------------------------------------------------------------------------
 dp.include_router(private_router)
+dp.include_router(student.callback_router)  # callback-кнопки ученика
 dp.include_router(teacher.callback_router)  # callback-кнопки учителя
 dp.include_router(group_router)
 
