@@ -106,6 +106,7 @@ OPENAI_API_KEY=sk-...                    # Ключ OpenAI API
 VIDEO_SAVING_PATH=/opt/ielts-bot/savings # Папка для аудио
 GROUP_ID=-1001234567890                  # ID одной группы (совместимость)
 GROUP_IDS=-1001234567890,-1002345678901  # ID нескольких групп через запятую
+# ALLOWED_GROUP_IDS=-1001234567890,-1002345678901 # необязательный алиас GROUP_IDS
 ```
 
 `GROUP_ID`, `GROUP_IDS` и необязательный алиас `ALLOWED_GROUP_IDS` объединяются в один список разрешённых групп. При запуске бот логирует только эти group ID для отладки доступа; `BOT_TOKEN` и `OPENAI_API_KEY` не логируются.
