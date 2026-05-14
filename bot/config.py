@@ -37,12 +37,17 @@ def _append_unique(group_ids: list[int], seen: set[int], group_id: int) -> None:
 
 
 def _parse_group_ids(raw_value: str, variable_name: str) -> list[int]:
+        logging.warning("Ignoring invalid %s Telegram group ID: %s", variable_name, value)
+        return 0
+
+
+def _parse_group_ids(raw_value: str) -> list[int]:
     """Parse comma-separated Telegram group IDs from environment."""
     group_ids: list[int] = []
     seen: set[int] = set()
 
     for item in raw_value.split(","):
-        group_id = _parse_group_id(item, variable_name)
+        group_id = _parse_group_id(item, "GROUP_IDS")
         if group_id and group_id not in seen:
             group_ids.append(group_id)
             seen.add(group_id)
