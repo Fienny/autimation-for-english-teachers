@@ -456,6 +456,61 @@ def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
                 break
         sections[marker[:-1]] = raw_feedback[content_start:end].strip()
 
+def _parts_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
+        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
+        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
+    ])
+
+
+def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
+    if language == "uz":
+        next_label = "Keyingi savol"
+        grammar_label = "Grammatika"
+        topic_label = "Mavzuni ochish"
+        vocab_label = "Lug‘at / Vocabulary"
+    else:
+        next_label = "Следующий вопрос"
+        grammar_label = "Грамматика"
+        topic_label = "Раскрытие темы"
+        vocab_label = "Лексика"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
+        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
+        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
+        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+    ])
+
+
+def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
+    lang = language or "ru"
+    return MESSAGES[lang][key].format(**kwargs)
+
+
+def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
+    markers = [
+        "MAIN_FEEDBACK:",
+        "VOCABULARY_FEEDBACK:",
+        "GRAMMAR_FEEDBACK:",
+        "TOPIC_FEEDBACK:",
+    ]
+    sections: dict[str, str] = {}
+
+    for i, marker in enumerate(markers):
+        start = raw_feedback.find(marker)
+        if start == -1:
+            continue
+        content_start = start + len(marker)
+        end = len(raw_feedback)
+        for next_marker in markers[i + 1:]:
+            idx = raw_feedback.find(next_marker, content_start)
+            if idx != -1:
+                end = idx
+                break
+        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
+
     return sections
 
 
@@ -487,28 +542,6 @@ async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         language=language,
         state="choosing_part",
         ielts_part=None,
-    user_id = callback.from_user.id
-    session = get_session(user_id)
-    if not session or not session.language:
-        create_session(user_id)
-        await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
-        await callback.answer()
-        return
-
-    if session.state == "generating_question":
-        await callback.message.answer(_t(session.language, "wait_question"))
-        await callback.answer()
-        return
-
-    if session.state == "processing_answer":
-        await callback.message.answer(_t(session.language, "processing_previous"))
-        await callback.answer()
-        return
-
-    session = update_session(
-        user_id,
-        ielts_part=part,
-        state="generating_question",
         question=None,
         transcript=None,
         feedback=None,
@@ -708,8 +741,6 @@ def _is_ready_for_voice(session: StudentSession | None) -> bool:
 async def _process_voice(message: types.Message, bot: Bot, session: StudentSession) -> None:
     user_id = message.from_user.id
     language = session.language
-    part = session.ielts_part
-    question = session.question
 
     update_session(user_id, state="processing_answer")
 

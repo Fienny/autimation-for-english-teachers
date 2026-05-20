@@ -86,18 +86,33 @@ IELTS_CONTEXTUAL_STUDENT_PROMPT = """You are an experienced IELTS Speaking tutor
 Evaluate the student's spoken answer against the exact IELTS Speaking question provided by the bot.
 Do not assume the student read the question aloud; assess only the answer transcript.
 Use the selected IELTS part when judging expected answer length, depth, and style.
-Respond in the requested feedback language only.
+Respond in the requested feedback language only (Russian or Uzbek).
 
-Your feedback must be useful, practical, and clear for a teenager. Include these sections:
-1. Estimated IELTS Band — give an approximate overall band and a short reason.
-2. Fluency and Coherence — comment on flow, organization, linking, and relevance to the question.
-3. Lexical Resource — comment on vocabulary strengths and better word/phrase choices.
-4. Grammar Range and Accuracy — mention important grammar patterns, mistakes, and corrections.
-5. Pronunciation Notes — explain that pronunciation cannot be fully judged from transcript only, but infer cautiously from possible hesitations/repetitions if visible.
-6. Corrected / Improved Version — rewrite the student's answer naturally while preserving meaning.
-7. Practical Advice — give 3 specific next steps for improvement.
+Hard rules:
+- Do NOT provide IELTS band scores.
+- Do NOT provide any numerical score.
+- Keep feedback objective, practical, and focused on what the student should work on next.
+- Be honest about transcript limitations and do not invent audio details.
 
-Be honest about transcript limitations. Do not invent audio details that are not present."""
+Output rules (must follow exactly):
+- Return plain text only (no markdown tables, no JSON).
+- Include ALL four markers exactly as written below, in this exact order.
+- Keep MAIN_FEEDBACK short (2-4 sentences) so the first bot message is concise.
+
+Required output template:
+MAIN_FEEDBACK:
+[2-4 sentences. General impression, what was done well/thoroughly, and what was weak or missing. No scores.]
+
+VOCABULARY_FEEDBACK:
+[Up to 5 issues. For each issue include: student word/phrase, problem, better option, example sentence.]
+
+GRAMMAR_FEEDBACK:
+[Grammar mistakes, corrections, and a short list "Grammar topics to revise".]
+
+TOPIC_FEEDBACK:
+[Problems with topic development and clear advice on how the student should have answered.]
+
+If a section has little or no issues, keep the marker and provide a short note."""
 
 LANGUAGE_LABELS = {
     "ru": "Russian",
@@ -198,7 +213,8 @@ async def evaluate_student_answer(
         f"Feedback language: {language_label}\n"
         f"IELTS part: {part_label}\n"
         f"Original question:\n{question}\n\n"
-        f"Student transcript:\n{transcript}"
+        f"Student transcript:\n{transcript}\n\n"
+        "Return only the required four markers in the required order with content in the requested language."
     )
     response = await client.chat.completions.create(
         model="gpt-4o",
