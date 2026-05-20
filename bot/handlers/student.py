@@ -112,7 +112,20 @@ def _language_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🇷🇺 Русский", callback_data="student:language:ru"),
         InlineKeyboardButton(text="🇺🇿 O‘zbek", callback_data="student:language:uz"),
     ]])
+AUDIO_TTL = 30  # секунд — удаляем аудиофайл
 
+callback_router = Router()
+
+LANGUAGE_NAMES: dict[StudentLanguage, str] = {
+    "ru": "Русский",
+    "uz": "O‘zbek",
+}
+
+PART_LABELS: dict[IeltsPart, str] = {
+    "1": "IELTS Speaking Part 1",
+    "2": "IELTS Speaking Part 2",
+    "3": "IELTS Speaking Part 3",
+}
 
 def _parts_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -203,7 +216,53 @@ async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         question=None,
         transcript=None,
         feedback=None,
-        feedback_sections=None,
+    )
+    await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
+    await callback.answer()
+
+
+@callback_router.callback_query(F.data.startswith("student:part:"))
+async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
+    if not await _ensure_student(callback, bot):
+        return
+
+    part = callback.data.rsplit(":", 1)[-1]
+    if part not in PART_LABELS:
+        await callback.answer("Unknown IELTS part", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+    session = get_session(user_id)
+    if not session or not session.language:
+        create_session(user_id)
+        await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
+        await callback.answer()
+        return
+    if session.state == "generating_question":
+        await callback.message.answer(_t(session.language, "wait_question"))
+        await callback.answer()
+        return
+    if session.state == "processing_answer":
+        await callback.message.answer(_t(session.language, "processing_previous"))
+        await callback.answer()
+        return
+
+    session = update_session(user_id, ielts_part=part, state="generating_question", question=None)
+    part_label = PART_LABELS[part]
+    await callback.message.answer(_t(session.language, "generating_question", part=part_label))
+    await callback.answer()
+
+    try:
+        question = await generate_ielts_question(part)
+    except Exception as e:
+        logging.error("[student] Ошибка генерации вопроса для %s: %s", user_id, e)
+        update_session(user_id, state="choosing_part", question=None)
+        await callback.message.answer(_t(session.language, "question_error"), reply_markup=_parts_keyboard())
+        return
+
+    session = update_session(user_id, state="awaiting_voice", question=question)
+    await callback.message.answer(
+        _t(session.language, "question_ready", part=part_label, question=question)
     )
     await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
     await callback.answer()
@@ -272,23 +331,18 @@ async def student_voice(message: types.Message, bot: Bot) -> None:
     if not session:
         await message.answer(_t(None, "need_start"), reply_markup=_language_keyboard())
         return
-
     if session.state == "choosing_language" or not session.language:
         await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
         return
-
     if session.state == "generating_question":
         await message.answer(_t(session.language, "wait_question"))
         return
-
     if session.state == "processing_answer":
         await message.answer(_t(session.language, "processing_previous"))
         return
-
     if session.state == "choosing_part" or not session.ielts_part or not session.question:
         await message.answer(_t(session.language, "need_part"), reply_markup=_parts_keyboard())
         return
-
     if session.state != "awaiting_voice":
         await message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
         return
@@ -366,15 +420,12 @@ async def _guide_to_current_step(message: types.Message, session: StudentSession
     if not session or not session.language:
         await message.answer(_t(None, "need_start"), reply_markup=_language_keyboard())
         return
-
     if session.state == "generating_question":
         await message.answer(_t(session.language, "wait_question"))
         return
-
     if session.state == "awaiting_voice":
         await message.answer(_t(session.language, "need_voice"))
         return
-
     await message.answer(_t(session.language, "need_part"), reply_markup=_parts_keyboard())
 
 
@@ -391,6 +442,8 @@ def _is_ready_for_voice(session: StudentSession | None) -> bool:
 async def _process_voice(message: types.Message, bot: Bot, session: StudentSession) -> None:
     user_id = message.from_user.id
     language = session.language
+    part = session.ielts_part
+    question = session.question
 
     update_session(user_id, state="processing_answer")
 
@@ -436,12 +489,13 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
         await message.answer(_t(language, "empty_transcript"))
         return
 
+    logging.info("[student] Транскрипт [%s]: %s", user_id, transcript)
     await message.answer(_t(language, "evaluating"))
 
     try:
         feedback = await evaluate_student_answer(
-            part=session.ielts_part,
-            question=session.question,
+            part=part,
+            question=question,
             transcript=transcript,
             language=language,
         )

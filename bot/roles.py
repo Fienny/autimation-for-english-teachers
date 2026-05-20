@@ -10,10 +10,13 @@ logger = logging.getLogger(__name__)
 TEACHER_STATUSES = {"creator", "administrator"}
 STUDENT_STATUSES = {"member", "restricted"}
 
+from bot.config import GROUP_IDS
 
 def _status_to_text(status: object) -> str:
     return status.value if hasattr(status, "value") else str(status)
 
+def _status_to_text(status: object) -> str:
+    return status.value if hasattr(status, "value") else str(status)
 
 async def get_user_role(bot: Bot, user_id: int, context: str = "access-check") -> str:
     """
