@@ -71,6 +71,62 @@ Transcript:"""
 
 
 # ---------------------------------------------------------------------------
+# Student question generation and contextual feedback
+# ---------------------------------------------------------------------------
+
+IELTS_QUESTION_PROMPT = """You generate realistic IELTS Speaking practice questions.
+Return exactly one prompt for the requested IELTS Speaking part.
+Do not include explanations, numbering, markdown, or answer hints.
+For Part 1, generate one natural examiner question about familiar everyday topics.
+For Part 2, generate one compact cue-card task with 3-4 bullet points and a final instruction to explain.
+For Part 3, generate one abstract discussion question suitable for IELTS Speaking Part 3.
+The question itself must be in English."""
+
+IELTS_CONTEXTUAL_STUDENT_PROMPT = """You are an experienced IELTS Speaking tutor.
+Evaluate the student's spoken answer against the exact IELTS Speaking question provided by the bot.
+Do not assume the student read the question aloud; assess only the answer transcript.
+Use the selected IELTS part when judging expected answer length, depth, and style.
+Respond in the requested feedback language only (Russian or Uzbek).
+
+Hard rules:
+- Do NOT provide IELTS band scores.
+- Do NOT provide any numerical score.
+- Keep feedback objective, practical, and focused on what the student should work on next.
+- Be honest about transcript limitations and do not invent audio details.
+
+Output rules (must follow exactly):
+- Return plain text only (no markdown tables, no JSON).
+- Include ALL four markers exactly as written below, in this exact order.
+- Keep MAIN_FEEDBACK short (2-4 sentences) so the first bot message is concise.
+
+Required output template:
+MAIN_FEEDBACK:
+[2-4 sentences. General impression, what was done well/thoroughly, and what was weak or missing. No scores.]
+
+VOCABULARY_FEEDBACK:
+[Up to 5 issues. For each issue include: student word/phrase, problem, better option, example sentence.]
+
+GRAMMAR_FEEDBACK:
+[Grammar mistakes, corrections, and a short list "Grammar topics to revise".]
+
+TOPIC_FEEDBACK:
+[Problems with topic development and clear advice on how the student should have answered.]
+
+If a section has little or no issues, keep the marker and provide a short note."""
+
+LANGUAGE_LABELS = {
+    "ru": "Russian",
+    "uz": "Uzbek",
+}
+
+PART_LABELS = {
+    "1": "IELTS Speaking Part 1",
+    "2": "IELTS Speaking Part 2",
+    "3": "IELTS Speaking Part 3",
+}
+
+
+# ---------------------------------------------------------------------------
 # Teacher prompt — возвращает JSON с 5 секциями
 # ---------------------------------------------------------------------------
 
@@ -125,6 +181,54 @@ async def evaluate_ielts(transcript: str) -> str:
     if not content or not content.strip():
         raise ValueError("OpenAI вернул пустое сообщение")
     return content
+
+
+async def generate_ielts_question(part: str) -> str:
+    part_label = PART_LABELS.get(part, f"IELTS Speaking Part {part}")
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": IELTS_QUESTION_PROMPT},
+            {"role": "user", "content": f"Generate one {part_label} question."},
+        ],
+    )
+    if not response.choices:
+        raise ValueError("OpenAI вернул пустой ответ")
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        raise ValueError("OpenAI вернул пустое сообщение")
+    return content.strip()
+
+
+async def evaluate_student_answer(
+    *,
+    part: str,
+    question: str,
+    transcript: str,
+    language: str,
+) -> str:
+    part_label = PART_LABELS.get(part, f"IELTS Speaking Part {part}")
+    language_label = LANGUAGE_LABELS.get(language, "Russian")
+    user_content = (
+        f"Feedback language: {language_label}\n"
+        f"IELTS part: {part_label}\n"
+        f"Original question:\n{question}\n\n"
+        f"Student transcript:\n{transcript}\n\n"
+        "Return only the required four markers in the required order with content in the requested language."
+    )
+    response = await client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": IELTS_CONTEXTUAL_STUDENT_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+    )
+    if not response.choices:
+        raise ValueError("OpenAI вернул пустой ответ")
+    content = response.choices[0].message.content
+    if not content or not content.strip():
+        raise ValueError("OpenAI вернул пустое сообщение")
+    return content.strip()
 
 
 async def evaluate_ielts_teacher(transcript: str) -> dict:
