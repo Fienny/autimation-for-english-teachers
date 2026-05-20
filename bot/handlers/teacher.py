@@ -182,15 +182,54 @@ async def _process_batch(messages: list[types.Message], bot: Bot) -> None:
     # Кэшируем секции на 30 минут
     cache_set(f"teacher:{user_id}", sections, RESPONSE_TTL)
 
-    # Отправляем overview + кнопки
-    overview = sections.get("overview", "—")
+    # Отправляем overview
+    overview = str(sections.get("overview", "—")).strip() or "—"
     for chunk in split_message(overview):
         await notify.answer(chunk)
+
+    # Отправляем основной фидбек отдельно от словаря
+    main_feedback = _build_main_feedback(sections)
+    if main_feedback:
+        for chunk in split_message(main_feedback):
+            await notify.answer(chunk)
+
+    vocabulary_feedback = _build_vocabulary_feedback(sections)
+    if vocabulary_feedback:
+        for chunk in split_message(vocabulary_feedback):
+            await notify.answer(chunk)
+    else:
+        await notify.answer("📚 Словарь: подробный словарный разбор включён в основной анализ.")
+
     await notify.answer(
         "Выбери секцию для подробного разбора:",
         reply_markup=_detail_keyboard(),
     )
 
+
+
+
+def _build_main_feedback(sections: dict) -> str:
+    parts: list[str] = []
+
+    authenticity = str(sections.get("authenticity", "")).strip()
+    grammar = str(sections.get("grammar", "")).strip()
+    ideas = str(sections.get("ideas", "")).strip()
+
+    if authenticity:
+        parts.append(f"🔍 Аутентичность\n{authenticity}")
+    if grammar:
+        parts.append(f"📝 Грамматика\n{grammar}")
+    if ideas:
+        parts.append(f"💡 Идеи\n{ideas}")
+
+    return "\n\n".join(parts).strip()
+
+
+def _build_vocabulary_feedback(sections: dict) -> str:
+    vocabulary = str(sections.get("vocabulary", "")).strip()
+    if not vocabulary:
+        return ""
+    return f"📚 Словарь\n{vocabulary}"
 
 # ---------------------------------------------------------------------------
 # Callback-обработчики кнопок
