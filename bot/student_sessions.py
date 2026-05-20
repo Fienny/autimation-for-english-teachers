@@ -31,7 +31,6 @@ class StudentSession:
     question: str | None = None
     transcript: str | None = None
     feedback: str | None = None
-    feedback_sections: dict[str, str] | None = None
     created_at: datetime = field(default_factory=_now)
     updated_at: datetime = field(default_factory=_now)
 
