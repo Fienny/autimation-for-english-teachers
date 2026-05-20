@@ -49,6 +49,7 @@ def _parse_group_ids(raw_value: str, variable_name: str) -> list[int]:
 
     return group_ids
 
+
 def _build_group_ids(group_id: int) -> list[int]:
     """Combine all supported group-id environment variables in priority order."""
     group_ids: list[int] = []

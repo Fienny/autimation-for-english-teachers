@@ -401,6 +401,133 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         await callback.answer("Unknown IELTS part", show_alert=True)
         return
 
+def _parts_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
+        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
+        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
+    ])
+
+
+def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
+    if language == "uz":
+        next_label = "Keyingi savol"
+        grammar_label = "Grammatika"
+        topic_label = "Mavzuni ochish"
+        vocab_label = "Lug‘at / Vocabulary"
+    else:
+        next_label = "Следующий вопрос"
+        grammar_label = "Грамматика"
+        topic_label = "Раскрытие темы"
+        vocab_label = "Лексика"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
+        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
+        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
+        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+    ])
+
+
+def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
+    lang = language or "ru"
+    return MESSAGES[lang][key].format(**kwargs)
+
+
+def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
+    markers = [
+        "MAIN_FEEDBACK:",
+        "VOCABULARY_FEEDBACK:",
+        "GRAMMAR_FEEDBACK:",
+        "TOPIC_FEEDBACK:",
+    ]
+    sections: dict[str, str] = {}
+
+    for i, marker in enumerate(markers):
+        start = raw_feedback.find(marker)
+        if start == -1:
+            continue
+        content_start = start + len(marker)
+        end = len(raw_feedback)
+        for next_marker in markers[i + 1:]:
+            idx = raw_feedback.find(next_marker, content_start)
+            if idx != -1:
+                end = idx
+                break
+        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
+
+    return sections
+
+
+async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
+    role = await get_user_role(bot, callback.from_user.id, context="student_callback")
+    if role != "student":
+        await callback.answer("Доступно только ученикам.", show_alert=True)
+        return False
+    return True
+
+
+async def student_start(message: types.Message, user_id: int | None = None) -> None:
+    create_session(user_id or message.from_user.id)
+    await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
+
+
+@callback_router.callback_query(F.data.startswith("student:language:"))
+async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
+    if not await _ensure_student(callback, bot):
+        return
+
+    language = callback.data.rsplit(":", 1)[-1]
+    if language not in LANGUAGE_NAMES:
+        await callback.answer("Unknown language", show_alert=True)
+        return
+
+    session = update_session(
+        callback.from_user.id,
+        language=language,
+        state="choosing_part",
+        ielts_part=None,
+    user_id = callback.from_user.id
+    session = get_session(user_id)
+    if not session or not session.language:
+        create_session(user_id)
+        await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
+        await callback.answer()
+        return
+
+    if session.state == "generating_question":
+        await callback.message.answer(_t(session.language, "wait_question"))
+        await callback.answer()
+        return
+
+    if session.state == "processing_answer":
+        await callback.message.answer(_t(session.language, "processing_previous"))
+        await callback.answer()
+        return
+
+    session = update_session(
+        user_id,
+        ielts_part=part,
+        state="generating_question",
+        question=None,
+        transcript=None,
+        feedback=None,
+        feedback_sections=None,
+    )
+    await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
+    await callback.answer()
+
+
+@callback_router.callback_query(F.data.startswith("student:part:"))
+async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
+    if not await _ensure_student(callback, bot):
+        return
+
+    part = callback.data.rsplit(":", 1)[-1]
+    if part not in PART_LABELS:
+        await callback.answer("Unknown IELTS part", show_alert=True)
+        return
+
     user_id = callback.from_user.id
     session = get_session(user_id)
     if not session or not session.language:
