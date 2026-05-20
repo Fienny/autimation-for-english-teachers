@@ -296,6 +296,129 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         await callback.answer()
         return
 
+def _parts_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
+        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
+        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
+    ])
+
+
+def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
+    if language == "uz":
+        next_label = "Keyingi savol"
+        grammar_label = "Grammatika"
+        topic_label = "Mavzuni ochish"
+        vocab_label = "Lug‘at / Vocabulary"
+    else:
+        next_label = "Следующий вопрос"
+        grammar_label = "Грамматика"
+        topic_label = "Раскрытие темы"
+        vocab_label = "Лексика"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
+        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
+        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
+        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+    ])
+
+
+def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
+    lang = language or "ru"
+    return MESSAGES[lang][key].format(**kwargs)
+
+
+def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
+    markers = [
+        "MAIN_FEEDBACK:",
+        "VOCABULARY_FEEDBACK:",
+        "GRAMMAR_FEEDBACK:",
+        "TOPIC_FEEDBACK:",
+    ]
+    sections: dict[str, str] = {}
+
+    for i, marker in enumerate(markers):
+        start = raw_feedback.find(marker)
+        if start == -1:
+            continue
+        content_start = start + len(marker)
+        end = len(raw_feedback)
+        for next_marker in markers[i + 1:]:
+            idx = raw_feedback.find(next_marker, content_start)
+            if idx != -1:
+                end = idx
+                break
+        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
+
+    return sections
+
+
+async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
+    role = await get_user_role(bot, callback.from_user.id, context="student_callback")
+    if role != "student":
+        await callback.answer("Доступно только ученикам.", show_alert=True)
+        return False
+    return True
+
+
+async def student_start(message: types.Message, user_id: int | None = None) -> None:
+    create_session(user_id or message.from_user.id)
+    await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
+
+
+@callback_router.callback_query(F.data.startswith("student:language:"))
+async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
+    if not await _ensure_student(callback, bot):
+        return
+
+    language = callback.data.rsplit(":", 1)[-1]
+    if language not in LANGUAGE_NAMES:
+        await callback.answer("Unknown language", show_alert=True)
+        return
+
+    session = update_session(
+        callback.from_user.id,
+        language=language,
+        state="choosing_part",
+        ielts_part=None,
+        question=None,
+        transcript=None,
+        feedback=None,
+        feedback_sections=None,
+    )
+    await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
+    await callback.answer()
+
+
+@callback_router.callback_query(F.data.startswith("student:part:"))
+async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
+    if not await _ensure_student(callback, bot):
+        return
+
+    part = callback.data.rsplit(":", 1)[-1]
+    if part not in PART_LABELS:
+        await callback.answer("Unknown IELTS part", show_alert=True)
+        return
+
+    user_id = callback.from_user.id
+    session = get_session(user_id)
+    if not session or not session.language:
+        create_session(user_id)
+        await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
+        await callback.answer()
+        return
+
+    if session.state == "generating_question":
+        await callback.message.answer(_t(session.language, "wait_question"))
+        await callback.answer()
+        return
+
+    if session.state == "processing_answer":
+        await callback.message.answer(_t(session.language, "processing_previous"))
+        await callback.answer()
+        return
+
     session = update_session(
         user_id,
         ielts_part=part,
@@ -305,6 +428,12 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         feedback=None,
         feedback_sections=None,
     )
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        # It's safe to continue if the original message can't be edited.
+        pass
+
     await callback.message.answer(_t(session.language, "generating_question", part=PART_LABELS[part]))
     await callback.answer()
 
@@ -316,8 +445,7 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         await callback.message.answer(_t(session.language, "question_error"), reply_markup=_parts_keyboard())
         return
 
-    update_session(user_id, state="awaiting_voice", question=question)
-    await callback.message.answer(_t(session.language, "question_ready", part=PART_LABELS[part], question=question))
+    await _send_question(callback.message, user_id=user_id, language=session.language, part=part, question=question)
 
 
 async def student_voice(message: types.Message, bot: Bot) -> None:
@@ -331,18 +459,23 @@ async def student_voice(message: types.Message, bot: Bot) -> None:
     if not session:
         await message.answer(_t(None, "need_start"), reply_markup=_language_keyboard())
         return
+
     if session.state == "choosing_language" or not session.language:
         await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
         return
+
     if session.state == "generating_question":
         await message.answer(_t(session.language, "wait_question"))
         return
+
     if session.state == "processing_answer":
         await message.answer(_t(session.language, "processing_previous"))
         return
+
     if session.state == "choosing_part" or not session.ielts_part or not session.question:
         await message.answer(_t(session.language, "need_part"), reply_markup=_parts_keyboard())
         return
+
     if session.state != "awaiting_voice":
         await message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
         return
@@ -392,9 +525,12 @@ async def on_student_detail(callback: types.CallbackQuery, bot: Bot) -> None:
             await callback.answer()
             return
 
-        update_session(user_id, state="awaiting_voice", question=question)
-        await callback.message.answer(
-            _t(session.language, "question_ready", part=PART_LABELS[session.ielts_part], question=question)
+        await _send_question(
+            callback.message,
+            user_id=user_id,
+            language=session.language,
+            part=session.ielts_part,
+            question=question,
         )
         await callback.answer()
         return
@@ -420,12 +556,15 @@ async def _guide_to_current_step(message: types.Message, session: StudentSession
     if not session or not session.language:
         await message.answer(_t(None, "need_start"), reply_markup=_language_keyboard())
         return
+
     if session.state == "generating_question":
         await message.answer(_t(session.language, "wait_question"))
         return
+
     if session.state == "awaiting_voice":
         await message.answer(_t(session.language, "need_voice"))
         return
+
     await message.answer(_t(session.language, "need_part"), reply_markup=_parts_keyboard())
 
 
@@ -489,13 +628,12 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
         await message.answer(_t(language, "empty_transcript"))
         return
 
-    logging.info("[student] Транскрипт [%s]: %s", user_id, transcript)
     await message.answer(_t(language, "evaluating"))
 
     try:
         feedback = await evaluate_student_answer(
-            part=part,
-            question=question,
+            part=session.ielts_part,
+            question=session.question,
             transcript=transcript,
             language=language,
         )
@@ -528,3 +666,15 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
         await message.answer(chunk)
 
     await message.answer(_t(language, "details_prompt"), reply_markup=_student_detail_keyboard(language))
+
+
+async def _send_question(
+    message: types.Message,
+    *,
+    user_id: int,
+    language: StudentLanguage,
+    part: IeltsPart,
+    question: str,
+) -> None:
+    update_session(user_id, ielts_part=part, state="awaiting_voice", question=question)
+    await message.answer(_t(language, "question_ready", part=PART_LABELS[part], question=question))
