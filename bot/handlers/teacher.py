@@ -182,15 +182,15 @@ async def _process_batch(messages: list[types.Message], bot: Bot) -> None:
     # Кэшируем секции на 30 минут
     cache_set(f"teacher:{user_id}", sections, RESPONSE_TTL)
 
-    # Отправляем overview + кнопки
-    overview = sections.get("overview", "—")
+    # Отправляем overview
+    overview = str(sections.get("overview", "—")).strip() or "—"
     for chunk in split_message(overview):
         await notify.answer(chunk)
+
     await notify.answer(
         "Выбери секцию для подробного разбора:",
         reply_markup=_detail_keyboard(),
     )
-
 
 # ---------------------------------------------------------------------------
 # Callback-обработчики кнопок
