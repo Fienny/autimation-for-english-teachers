@@ -119,6 +119,47 @@ def _language_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🇷🇺 Русский", callback_data="student:language:ru"),
         InlineKeyboardButton(text="🇺🇿 O‘zbek", callback_data="student:language:uz"),
     ]])
+AUDIO_TTL = 30  # секунд — удаляем аудиофайл
+
+callback_router = Router()
+
+LANGUAGE_NAMES: dict[StudentLanguage, str] = {
+    "ru": "Русский",
+    "uz": "O‘zbek",
+}
+
+PART_LABELS: dict[IeltsPart, str] = {
+    "1": "IELTS Speaking Part 1",
+    "2": "IELTS Speaking Part 2",
+    "3": "IELTS Speaking Part 3",
+}
+
+def _parts_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
+        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
+        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
+    ])
+
+
+def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
+    if language == "uz":
+        next_label = "Keyingi savol"
+        grammar_label = "Grammatika"
+        topic_label = "Mavzuni ochish"
+        vocab_label = "Lug‘at / Vocabulary"
+    else:
+        next_label = "Следующий вопрос"
+        grammar_label = "Грамматика"
+        topic_label = "Раскрытие темы"
+        vocab_label = "Лексика"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
+        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
+        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
+        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+    ])
 
 
 def _parts_keyboard() -> InlineKeyboardMarkup:
