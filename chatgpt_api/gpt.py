@@ -97,6 +97,10 @@ Hard rules:
 Output rules (must follow exactly):
 - Return plain text only (no markdown tables, no JSON).
 - Include ALL section headers exactly as written below, in this exact order.
+- Do NOT leave any section empty.
+- After every heading, write useful content (at least 1-2 sentences or bullet points).
+- If there are no major issues, still write a short meaningful note for that section.
+- Do NOT output headings only.
 - No IELTS band numeric sub-scores except the single estimated overall band line.
 - Keep each section practical and concise.
 - Pronunciation / Delivery Notes must clearly state limitations of transcript-only review and avoid invented audio claims.

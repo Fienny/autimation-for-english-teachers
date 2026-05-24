@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import re
 import shutil
 
 from aiogram import Bot, F, Router, types
@@ -41,7 +42,7 @@ PART_LABELS: dict[IeltsPart, str] = {
     "2": "IELTS Speaking Part 2",
     "3": "IELTS Speaking Part 3",
 }
-  
+
 DETAIL_SECTION_KEYS = {
     "grammar": "Grammar Range and Accuracy",
     "topic": "Task Response / Topic Development",
@@ -161,147 +162,6 @@ def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
     ])
 
 
-def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
-    lang = language or "ru"
-    return MESSAGES[lang][key].format(**kwargs)
-
-
-def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
-    markers = [
-        "MAIN_FEEDBACK:",
-        "VOCABULARY_FEEDBACK:",
-        "GRAMMAR_FEEDBACK:",
-        "TOPIC_FEEDBACK:",
-    ]
-    sections: dict[str, str] = {}
-
-    for i, marker in enumerate(markers):
-        start = raw_feedback.find(marker)
-        if start == -1:
-            continue
-        content_start = start + len(marker)
-        end = len(raw_feedback)
-        for next_marker in markers[i + 1:]:
-            idx = raw_feedback.find(next_marker, content_start)
-            if idx != -1:
-                end = idx
-                break
-        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
-
-    return sections
-
-
-async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
-    role = await get_user_role(bot, callback.from_user.id, context="student_callback")
-    if role != "student":
-        await callback.answer("Доступно только ученикам.", show_alert=True)
-        return False
-    return True
-
-
-async def student_start(message: types.Message, user_id: int | None = None) -> None:
-    create_session(user_id or message.from_user.id)
-    await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
-
-
-@callback_router.callback_query(F.data.startswith("student:language:"))
-async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
-    if not await _ensure_student(callback, bot):
-        return
-
-    language = callback.data.rsplit(":", 1)[-1]
-    if language not in LANGUAGE_NAMES:
-        await callback.answer("Unknown language", show_alert=True)
-        return
-
-    session = update_session(
-        callback.from_user.id,
-        language=language,
-        state="choosing_part",
-        ielts_part=None,
-        question=None,
-        transcript=None,
-        feedback=None,
-    )
-    await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
-    await callback.answer()
-
-
-@callback_router.callback_query(F.data.startswith("student:part:"))
-async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
-    if not await _ensure_student(callback, bot):
-        return
-
-    part = callback.data.rsplit(":", 1)[-1]
-    if part not in PART_LABELS:
-        await callback.answer("Unknown IELTS part", show_alert=True)
-        return
-
-    user_id = callback.from_user.id
-    session = get_session(user_id)
-    if not session or not session.language:
-        create_session(user_id)
-        await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
-        await callback.answer()
-        return
-    if session.state == "generating_question":
-        await callback.message.answer(_t(session.language, "wait_question"))
-        await callback.answer()
-        return
-    if session.state == "processing_answer":
-        await callback.message.answer(_t(session.language, "processing_previous"))
-        await callback.answer()
-        return
-
-    session = update_session(user_id, ielts_part=part, state="generating_question", question=None)
-    part_label = PART_LABELS[part]
-    await callback.message.answer(_t(session.language, "generating_question", part=part_label))
-    await callback.answer()
-
-    try:
-        question = await generate_ielts_question(part)
-    except Exception as e:
-        logging.error("[student] Ошибка генерации вопроса для %s: %s", user_id, e)
-        update_session(user_id, state="choosing_part", question=None)
-        await callback.message.answer(_t(session.language, "question_error"), reply_markup=_parts_keyboard())
-        return
-
-    session = update_session(user_id, state="awaiting_voice", question=question)
-    await callback.message.answer(
-        _t(session.language, "question_ready", part=part_label, question=question)
-    )
-    await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
-    await callback.answer()
-
-
-@callback_router.callback_query(F.data.startswith("student:part:"))
-async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
-    if not await _ensure_student(callback, bot):
-        return
-
-    part = callback.data.rsplit(":", 1)[-1]
-    if part not in PART_LABELS:
-        await callback.answer("Unknown IELTS part", show_alert=True)
-        return
-
-    user_id = callback.from_user.id
-    session = get_session(user_id)
-    if not session or not session.language:
-        create_session(user_id)
-        await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
-        await callback.answer()
-        return
-
-    if session.state == "generating_question":
-        await callback.message.answer(_t(session.language, "wait_question"))
-        await callback.answer()
-        return
-
-    if session.state == "processing_answer":
-        await callback.message.answer(_t(session.language, "processing_previous"))
-        await callback.answer()
-        return
-
 def _parts_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
@@ -327,76 +187,6 @@ def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
         [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
         [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
-    ])
-
-
-def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
-    lang = language or "ru"
-    return MESSAGES[lang][key].format(**kwargs)
-
-
-def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
-    markers = [
-        "MAIN_FEEDBACK:",
-        "VOCABULARY_FEEDBACK:",
-        "GRAMMAR_FEEDBACK:",
-        "TOPIC_FEEDBACK:",
-    ]
-    sections: dict[str, str] = {}
-
-    for i, marker in enumerate(markers):
-        start = raw_feedback.find(marker)
-        if start == -1:
-            continue
-        content_start = start + len(marker)
-        end = len(raw_feedback)
-        for next_marker in markers[i + 1:]:
-            idx = raw_feedback.find(next_marker, content_start)
-            if idx != -1:
-                end = idx
-                break
-        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
-
-    return sections
-
-
-async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
-    role = await get_user_role(bot, callback.from_user.id, context="student_callback")
-    if role != "student":
-        await callback.answer("Доступно только ученикам.", show_alert=True)
-        return False
-    return True
-
-
-async def student_start(message: types.Message, user_id: int | None = None) -> None:
-    create_session(user_id or message.from_user.id)
-    await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
-
-def _parts_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
-        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
-        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
-    ])
-
-
-def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
-    if language == "uz":
-        next_label = "Keyingi savol"
-        grammar_label = "Grammatika"
-        topic_label = "Mavzuni ochish"
-        vocab_label = "Lug‘at / Vocabulary"
-    else:
-        next_label = "Следующий вопрос"
-        grammar_label = "Грамматика"
-        topic_label = "Раскрытие темы"
-        vocab_label = "Лексика"
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
-        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
-        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
-        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
     ])
 
 
@@ -416,22 +206,60 @@ def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
         "Corrected Answer:",
         "How to Improve:",
     ]
+    normalized = raw_feedback
+    for marker in markers:
+        bare = re.escape(marker)
+        with_bold = re.escape(f"**{marker}**")
+        normalized = re.sub(with_bold, marker, normalized, flags=re.IGNORECASE)
+        normalized = re.sub(rf"^\s*\*\*{bare}\*\*\s*$", marker, normalized, flags=re.IGNORECASE | re.MULTILINE)
+
     sections: dict[str, str] = {}
-
     for i, marker in enumerate(markers):
-        start = raw_feedback.find(marker)
-        if start == -1:
+        pattern = re.compile(rf"^\s*{re.escape(marker)}\s*$", flags=re.IGNORECASE | re.MULTILINE)
+        start_match = pattern.search(normalized)
+        if not start_match:
             continue
-        content_start = start + len(marker)
-        end = len(raw_feedback)
+        content_start = start_match.end()
+        end = len(normalized)
         for next_marker in markers[i + 1:]:
-            idx = raw_feedback.find(next_marker, content_start)
-            if idx != -1:
-                end = idx
+            next_pattern = re.compile(rf"^\s*{re.escape(next_marker)}\s*$", flags=re.IGNORECASE | re.MULTILINE)
+            next_match = next_pattern.search(normalized, content_start)
+            if next_match:
+                end = next_match.start()
                 break
-        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
-
+        content = normalized[content_start:end].strip()
+        sections[marker[:-1]] = content
     return sections
+
+
+def _sections_have_content(sections: dict[str, str]) -> bool:
+    required = [
+        "Estimated IELTS Band",
+        "Task Response / Topic Development",
+        "Fluency and Coherence",
+        "Lexical Resource",
+        "Grammar Range and Accuracy",
+        "Pronunciation / Delivery Notes",
+        "Corrected Answer",
+        "How to Improve",
+    ]
+    return all((sections.get(key) or "").strip() for key in required)
+
+
+def _parse_student_feedback_sections_example() -> None:
+    """Local parser sanity example (not used in runtime)."""
+    sample = (
+        "**Estimated IELTS Band:**\nBand 6.0 overall.\n\n"
+        "**Task Response / Topic Development:**\nYou answered the question, but lacked examples.\n\n"
+        "**Fluency and Coherence:**\nMostly clear with some pauses.\n\n"
+        "**Lexical Resource:**\nUsed simple vocabulary repeatedly.\n\n"
+        "**Grammar Range and Accuracy:**\nSeveral tense errors appeared.\n\n"
+        "**Pronunciation / Delivery Notes:**\nTranscript-only review; precise pronunciation needs audio.\n\n"
+        "**Corrected Answer:**\nI usually spend my free time reading books and jogging.\n\n"
+        "**How to Improve:**\nAdd 2 concrete examples and vary linking words."
+    )
+    parsed = _parse_student_feedback_sections(sample)
+    assert _sections_have_content(parsed)
 
 
 async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
@@ -481,66 +309,6 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         await callback.answer("Unknown IELTS part", show_alert=True)
         return
 
-def _parts_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
-        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
-        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
-    ])
-
-
-def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
-    if language == "uz":
-        next_label = "Keyingi savol"
-        grammar_label = "Grammatika"
-        topic_label = "Mavzuni ochish"
-        vocab_label = "Lug‘at / Vocabulary"
-    else:
-        next_label = "Следующий вопрос"
-        grammar_label = "Грамматика"
-        topic_label = "Раскрытие темы"
-        vocab_label = "Лексика"
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
-        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
-        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
-        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
-    ])
-
-
-def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
-    lang = language or "ru"
-    return MESSAGES[lang][key].format(**kwargs)
-
-
-def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
-    markers = [
-        "Estimated IELTS Band:",
-        "Task Response / Topic Development:",
-        "Fluency and Coherence:",
-        "Lexical Resource:",
-        "Grammar Range and Accuracy:",
-        "Pronunciation / Delivery Notes:",
-        "Corrected Answer:",
-        "How to Improve:",
-    ]
-    sections: dict[str, str] = {}
-
-    for i, marker in enumerate(markers):
-        start = raw_feedback.find(marker)
-        if start == -1:
-            continue
-        content_start = start + len(marker)
-        end = len(raw_feedback)
-        for next_marker in markers[i + 1:]:
-            idx = raw_feedback.find(next_marker, content_start)
-            if idx != -1:
-                end = idx
-                break
-        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
-
-    return sections
     user_id = callback.from_user.id
     session = get_session(user_id)
     if not session or not session.language:
@@ -778,7 +546,7 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
         return
 
     sections = _parse_student_feedback_sections(feedback)
-    if not sections:
+    if not sections or not _sections_have_content(sections):
         sections = {
             "Estimated IELTS Band": "",
             "Task Response / Topic Development": "",
@@ -790,12 +558,15 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
             "How to Improve": feedback,
         }
 
-    main_feedback = "\n\n".join(
-        part for part in [
-            f"Estimated IELTS Band:\n{sections.get('Estimated IELTS Band', '').strip()}".strip(),
-            f"Task Response / Topic Development:\n{sections.get('Task Response / Topic Development', '').strip()}".strip(),
-            f"Fluency and Coherence:\n{sections.get('Fluency and Coherence', '').strip()}".strip(),
-        ] if part and not part.endswith(":\n")
+    parsed_ok = _sections_have_content(sections)
+    main_feedback = (
+        "\n\n".join(
+            part for part in [
+                f"Estimated IELTS Band:\n{sections.get('Estimated IELTS Band', '').strip()}".strip(),
+                f"Task Response / Topic Development:\n{sections.get('Task Response / Topic Development', '').strip()}".strip(),
+                f"Fluency and Coherence:\n{sections.get('Fluency and Coherence', '').strip()}".strip(),
+            ] if part and not part.endswith(":\n")
+        ) if parsed_ok else feedback
     ) or feedback
 
     update_session(
@@ -803,13 +574,14 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
         state="completed",
         transcript=transcript,
         feedback=feedback,
-        feedback_sections=sections,
+        feedback_sections=sections if parsed_ok else None,
     )
 
     for chunk in split_message(main_feedback):
         await message.answer(chunk)
 
-    await message.answer(_t(language, "details_prompt"), reply_markup=_student_detail_keyboard(language))
+    if parsed_ok:
+        await message.answer(_t(language, "details_prompt"), reply_markup=_student_detail_keyboard(language))
 
 
 async def _send_question(
