@@ -96,23 +96,37 @@ Hard rules:
 
 Output rules (must follow exactly):
 - Return plain text only (no markdown tables, no JSON).
-- Include ALL four markers exactly as written below, in this exact order.
-- Keep MAIN_FEEDBACK short (2-4 sentences) so the first bot message is concise.
+- Include ALL section headers exactly as written below, in this exact order.
+- No IELTS band numeric sub-scores except the single estimated overall band line.
+- Keep each section practical and concise.
+- Pronunciation / Delivery Notes must clearly state limitations of transcript-only review and avoid invented audio claims.
 
 Required output template:
-MAIN_FEEDBACK:
-[2-4 sentences. General impression, what was done well/thoroughly, and what was weak or missing. No scores.]
+Estimated IELTS Band:
+[One short estimated overall band line. No detailed numeric breakdown.]
 
-VOCABULARY_FEEDBACK:
-[Up to 5 issues. For each issue include: student word/phrase, problem, better option, example sentence.]
+Task Response / Topic Development:
+[Say whether the student answered the exact question, what details were missing, and 2-4 short practical content ideas they could have added.]
 
-GRAMMAR_FEEDBACK:
-[Grammar mistakes, corrections, and a short list "Grammar topics to revise".]
+Fluency and Coherence:
+[Comment on flow, linking, organization, and clarity.]
 
-TOPIC_FEEDBACK:
-[Problems with topic development and clear advice on how the student should have answered.]
+Lexical Resource:
+[Identify noticeable vocabulary issues; for longer answers provide up to 8 issues. For each: quote phrase, brief problem, better alternative.]
 
-If a section has little or no issues, keep the marker and provide a short note."""
+Grammar Range and Accuracy:
+[Identify noticeable grammar issues; for longer answers provide up to 8 issues. For each: quote phrase, brief issue, corrected version.]
+
+Pronunciation / Delivery Notes:
+[State only limited delivery notes possible from transcript and explicitly mention that precise pronunciation needs audio-level analysis.]
+
+Corrected Answer:
+[Provide an improved English version of the student's answer.]
+
+How to Improve:
+[Short actionable steps for the next attempt.]
+
+If a section has little or no issues, keep the header and provide a short note."""
 
 LANGUAGE_LABELS = {
     "ru": "Russian",
@@ -214,7 +228,7 @@ async def evaluate_student_answer(
         f"IELTS part: {part_label}\n"
         f"Original question:\n{question}\n\n"
         f"Student transcript:\n{transcript}\n\n"
-        "Return only the required four markers in the required order with content in the requested language."
+        "Return only the required section headers in the required order with content in the requested language."
     )
     response = await client.chat.completions.create(
         model="gpt-4o",

@@ -41,11 +41,11 @@ PART_LABELS: dict[IeltsPart, str] = {
     "2": "IELTS Speaking Part 2",
     "3": "IELTS Speaking Part 3",
 }
-
+  
 DETAIL_SECTION_KEYS = {
-    "grammar": "GRAMMAR_FEEDBACK",
-    "topic": "TOPIC_FEEDBACK",
-    "vocab": "VOCABULARY_FEEDBACK",
+    "grammar": "Grammar Range and Accuracy",
+    "topic": "Task Response / Topic Development",
+    "vocab": "Lexical Resource",
 }
 
 DETAIL_SECTION_TITLES = {
@@ -67,6 +67,7 @@ MESSAGES = {
         "choose_part": "Отлично! Теперь выберите часть IELTS Speaking:",
         "generating_question": "Генерирую вопрос для {part}...",
         "question_ready": "Ваш вопрос для {part}:\n\n{question}\n\nОтветьте голосовым сообщением на английском.",
+        "part2_duration_hint": "Для Part 2 постарайтесь говорить от 1 до 2 минут.",
         "question_error": "Не удалось сгенерировать вопрос. Попробуйте выбрать часть ещё раз.",
         "need_start": "Начните тренировку с /start, затем выберите язык и часть IELTS Speaking.",
         "need_part": "Сначала выберите часть IELTS Speaking.",
@@ -75,8 +76,10 @@ MESSAGES = {
         "need_voice": "Пожалуйста, ответьте голосовым сообщением.",
         "voice_received": "Голосовое получено, транскрибирую...",
         "convert_error": "Не удалось обработать аудиофайл. Попробуйте ещё раз.",
-        "transcription_error": "Не удалось распознать аудио. Попробуйте записать ответ ещё раз.",
-        "empty_transcript": "Не удалось распознать речь в аудио. Попробуйте записать ответ ещё раз.",
+        "transcription_error": "Не удалось распознать аудио. Пожалуйста, перезапишите ответ, желательно с другого устройства или микрофона.",
+        "empty_transcript": "Не удалось распознать аудио. Пожалуйста, перезапишите ответ, желательно с другого устройства или микрофона.",
+        "part2_too_short": "Ответ слишком короткий для Part 2. Нужно говорить минимум 1 минуту. Пожалуйста, перезапишите ответ по тому же вопросу.",
+        "part2_too_long": "Ответ слишком длинный для Part 2. Максимум — 3 минуты. Пожалуйста, перезапишите ответ по тому же вопросу.",
         "evaluating": "Транскрипт получен, готовлю подробный фидбек...",
         "feedback_error": "Не удалось получить фидбек. Попробуйте отправить ответ ещё раз.",
         "details_prompt": "Выберите, что хотите посмотреть:",
@@ -88,6 +91,7 @@ MESSAGES = {
         "choose_part": "Ajoyib! Endi IELTS Speaking qismini tanlang:",
         "generating_question": "{part} uchun savol tayyorlayapman...",
         "question_ready": "{part} uchun savolingiz:\n\n{question}\n\nJavobingizni ingliz tilida ovozli xabar qilib yuboring.",
+        "part2_duration_hint": "Part 2 uchun 1 dan 2 daqiqagacha gapirishga harakat qiling.",
         "question_error": "Savol yaratib bo‘lmadi. Iltimos, qismni yana bir marta tanlang.",
         "need_start": "Mashqni /start orqali boshlang, keyin til va IELTS Speaking qismini tanlang.",
         "need_part": "Avval IELTS Speaking qismini tanlang.",
@@ -96,8 +100,10 @@ MESSAGES = {
         "need_voice": "Iltimos, javobingizni ovozli xabar qilib yuboring.",
         "voice_received": "Ovozli xabar qabul qilindi, transkripsiya qilyapman...",
         "convert_error": "Audio faylni qayta ishlab bo‘lmadi. Iltimos, yana urinib ko‘ring.",
-        "transcription_error": "Audioni tanib bo‘lmadi. Iltimos, javobingizni qayta yozib yuboring.",
-        "empty_transcript": "Audioda nutq aniqlanmadi. Iltimos, javobingizni qayta yozib yuboring.",
+        "transcription_error": "Audioni aniqlab bo‘lmadi. Iltimos, javobni qayta yozing, imkon bo‘lsa boshqa qurilma yoki mikrofondan foydalaning.",
+        "empty_transcript": "Audioni aniqlab bo‘lmadi. Iltimos, javobni qayta yozing, imkon bo‘lsa boshqa qurilma yoki mikrofondan foydalaning.",
+        "part2_too_short": "Part 2 uchun javob juda qisqa. Kamida 1 daqiqa gapirish kerak. Iltimos, shu savol bo‘yicha javobni qayta yozing.",
+        "part2_too_long": "Part 2 uchun javob juda uzun. Maksimum 3 daqiqa. Iltimos, shu savol bo‘yicha javobni qayta yozing.",
         "evaluating": "Transkript tayyor, batafsil feedback tayyorlayapman...",
         "feedback_error": "Feedback olishda xatolik yuz berdi. Iltimos, javobingizni qayta yuboring.",
         "details_prompt": "Quyidagilardan birini tanlang:",
@@ -366,41 +372,6 @@ async def student_start(message: types.Message, user_id: int | None = None) -> N
     create_session(user_id or message.from_user.id)
     await message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
 
-
-@callback_router.callback_query(F.data.startswith("student:language:"))
-async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
-    if not await _ensure_student(callback, bot):
-        return
-
-    language = callback.data.rsplit(":", 1)[-1]
-    if language not in LANGUAGE_NAMES:
-        await callback.answer("Unknown language", show_alert=True)
-        return
-
-    session = update_session(
-        callback.from_user.id,
-        language=language,
-        state="choosing_part",
-        ielts_part=None,
-        question=None,
-        transcript=None,
-        feedback=None,
-        feedback_sections=None,
-    )
-    await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
-    await callback.answer()
-
-
-@callback_router.callback_query(F.data.startswith("student:part:"))
-async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
-    if not await _ensure_student(callback, bot):
-        return
-
-    part = callback.data.rsplit(":", 1)[-1]
-    if part not in PART_LABELS:
-        await callback.answer("Unknown IELTS part", show_alert=True)
-        return
-
 def _parts_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
@@ -422,10 +393,10 @@ def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
         vocab_label = "Лексика"
 
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
         [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
         [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
         [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
     ])
 
 
@@ -436,65 +407,14 @@ def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
 
 def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
     markers = [
-        "MAIN_FEEDBACK:",
-        "VOCABULARY_FEEDBACK:",
-        "GRAMMAR_FEEDBACK:",
-        "TOPIC_FEEDBACK:",
-    ]
-    sections: dict[str, str] = {}
-
-    for i, marker in enumerate(markers):
-        start = raw_feedback.find(marker)
-        if start == -1:
-            continue
-        content_start = start + len(marker)
-        end = len(raw_feedback)
-        for next_marker in markers[i + 1:]:
-            idx = raw_feedback.find(next_marker, content_start)
-            if idx != -1:
-                end = idx
-                break
-        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
-
-def _parts_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
-        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
-        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
-    ])
-
-
-def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
-    if language == "uz":
-        next_label = "Keyingi savol"
-        grammar_label = "Grammatika"
-        topic_label = "Mavzuni ochish"
-        vocab_label = "Lug‘at / Vocabulary"
-    else:
-        next_label = "Следующий вопрос"
-        grammar_label = "Грамматика"
-        topic_label = "Раскрытие темы"
-        vocab_label = "Лексика"
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
-        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
-        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
-        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
-    ])
-
-
-def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
-    lang = language or "ru"
-    return MESSAGES[lang][key].format(**kwargs)
-
-
-def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
-    markers = [
-        "MAIN_FEEDBACK:",
-        "VOCABULARY_FEEDBACK:",
-        "GRAMMAR_FEEDBACK:",
-        "TOPIC_FEEDBACK:",
+        "Estimated IELTS Band:",
+        "Task Response / Topic Development:",
+        "Fluency and Coherence:",
+        "Lexical Resource:",
+        "Grammar Range and Accuracy:",
+        "Pronunciation / Delivery Notes:",
+        "Corrected Answer:",
+        "How to Improve:",
     ]
     sections: dict[str, str] = {}
 
@@ -561,6 +481,66 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         await callback.answer("Unknown IELTS part", show_alert=True)
         return
 
+def _parts_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
+        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
+        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
+    ])
+
+
+def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
+    if language == "uz":
+        next_label = "Keyingi savol"
+        grammar_label = "Grammatika"
+        topic_label = "Mavzuni ochish"
+        vocab_label = "Lug‘at / Vocabulary"
+    else:
+        next_label = "Следующий вопрос"
+        grammar_label = "Грамматика"
+        topic_label = "Раскрытие темы"
+        vocab_label = "Лексика"
+
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
+        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
+        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
+    ])
+
+
+def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
+    lang = language or "ru"
+    return MESSAGES[lang][key].format(**kwargs)
+
+
+def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
+    markers = [
+        "Estimated IELTS Band:",
+        "Task Response / Topic Development:",
+        "Fluency and Coherence:",
+        "Lexical Resource:",
+        "Grammar Range and Accuracy:",
+        "Pronunciation / Delivery Notes:",
+        "Corrected Answer:",
+        "How to Improve:",
+    ]
+    sections: dict[str, str] = {}
+
+    for i, marker in enumerate(markers):
+        start = raw_feedback.find(marker)
+        if start == -1:
+            continue
+        content_start = start + len(marker)
+        end = len(raw_feedback)
+        for next_marker in markers[i + 1:]:
+            idx = raw_feedback.find(next_marker, content_start)
+            if idx != -1:
+                end = idx
+                break
+        sections[marker[:-1]] = raw_feedback[content_start:end].strip()
+
+    return sections
     user_id = callback.from_user.id
     session = get_session(user_id)
     if not session or not session.language:
@@ -668,30 +648,15 @@ async def on_student_detail(callback: types.CallbackQuery, bot: Bot) -> None:
         return
 
     if action == "next":
-        if not session.ielts_part:
-            await callback.answer(_t(session.language, "session_lost"), show_alert=True)
-            await callback.message.answer(_t(session.language, "session_lost"), reply_markup=_parts_keyboard())
-            return
-        await callback.message.answer(
-            _t(session.language, "generating_question", part=PART_LABELS[session.ielts_part])
+        update_session(
+            user_id,
+            state="choosing_part",
+            question=None,
+            transcript=None,
+            feedback=None,
+            feedback_sections=None,
         )
-        update_session(user_id, state="generating_question", question=None)
-        try:
-            question = await generate_ielts_question(session.ielts_part)
-        except Exception as e:
-            logging.error("[student] Ошибка генерации вопроса по кнопке next для %s: %s", user_id, e)
-            update_session(user_id, state="choosing_part", question=None)
-            await callback.message.answer(_t(session.language, "question_error"), reply_markup=_parts_keyboard())
-            await callback.answer()
-            return
-
-        await _send_question(
-            callback.message,
-            user_id=user_id,
-            language=session.language,
-            part=session.ielts_part,
-            question=question,
-        )
+        await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
         await callback.answer()
         return
 
@@ -741,6 +706,17 @@ def _is_ready_for_voice(session: StudentSession | None) -> bool:
 async def _process_voice(message: types.Message, bot: Bot, session: StudentSession) -> None:
     user_id = message.from_user.id
     language = session.language
+
+    if session.ielts_part == "2" and message.voice:
+        duration = message.voice.duration or 0
+        if duration < 60:
+            update_session(user_id, state="awaiting_voice")
+            await message.answer(_t(language, "part2_too_short"))
+            return
+        if duration > 180:
+            update_session(user_id, state="awaiting_voice")
+            await message.answer(_t(language, "part2_too_long"))
+            return
 
     update_session(user_id, state="processing_answer")
 
@@ -804,13 +780,23 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
     sections = _parse_student_feedback_sections(feedback)
     if not sections:
         sections = {
-            "MAIN_FEEDBACK": feedback,
-            "VOCABULARY_FEEDBACK": "",
-            "GRAMMAR_FEEDBACK": "",
-            "TOPIC_FEEDBACK": "",
+            "Estimated IELTS Band": "",
+            "Task Response / Topic Development": "",
+            "Fluency and Coherence": "",
+            "Lexical Resource": "",
+            "Grammar Range and Accuracy": "",
+            "Pronunciation / Delivery Notes": "",
+            "Corrected Answer": "",
+            "How to Improve": feedback,
         }
 
-    main_feedback = sections.get("MAIN_FEEDBACK", "").strip() or feedback
+    main_feedback = "\n\n".join(
+        part for part in [
+            f"Estimated IELTS Band:\n{sections.get('Estimated IELTS Band', '').strip()}".strip(),
+            f"Task Response / Topic Development:\n{sections.get('Task Response / Topic Development', '').strip()}".strip(),
+            f"Fluency and Coherence:\n{sections.get('Fluency and Coherence', '').strip()}".strip(),
+        ] if part and not part.endswith(":\n")
+    ) or feedback
 
     update_session(
         user_id,
@@ -836,3 +822,5 @@ async def _send_question(
 ) -> None:
     update_session(user_id, ielts_part=part, state="awaiting_voice", question=question)
     await message.answer(_t(language, "question_ready", part=PART_LABELS[part], question=question))
+    if part == "2":
+        await message.answer(_t(language, "part2_duration_hint"))
