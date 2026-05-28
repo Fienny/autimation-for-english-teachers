@@ -27,6 +27,8 @@ from chatgpt_api.gpt import (
     transcribe_audio,
 )
 
+logger = logging.getLogger(__name__)
+
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 AUDIO_TTL = 30
 
@@ -115,31 +117,24 @@ MESSAGES = {
 
 
 def _language_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="🇷🇺 Русский", callback_data="student:language:ru"),
-        InlineKeyboardButton(text="🇺🇿 O‘zbek", callback_data="student:language:uz"),
-    ]])
-AUDIO_TTL = 30  # секунд — удаляем аудиофайл
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🇷🇺 Русский", callback_data="student:language:ru"),
+                InlineKeyboardButton(text="🇺🇿 O‘zbek", callback_data="student:language:uz"),
+            ]
+        ]
+    )
 
-callback_router = Router()
-
-LANGUAGE_NAMES: dict[StudentLanguage, str] = {
-    "ru": "Русский",
-    "uz": "O‘zbek",
-}
-
-PART_LABELS: dict[IeltsPart, str] = {
-    "1": "IELTS Speaking Part 1",
-    "2": "IELTS Speaking Part 2",
-    "3": "IELTS Speaking Part 3",
-}
 
 def _parts_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
-        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
-        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
+            [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
+            [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
+        ]
+    )
 
 
 def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
@@ -154,40 +149,14 @@ def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
         topic_label = "Раскрытие темы"
         vocab_label = "Лексика"
 
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
-        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
-        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
-        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
-    ])
-
-
-def _parts_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Part 1", callback_data="student:part:1")],
-        [InlineKeyboardButton(text="Part 2", callback_data="student:part:2")],
-        [InlineKeyboardButton(text="Part 3", callback_data="student:part:3")],
-    ])
-
-
-def _student_detail_keyboard(language: StudentLanguage) -> InlineKeyboardMarkup:
-    if language == "uz":
-        next_label = "Keyingi savol"
-        grammar_label = "Grammatika"
-        topic_label = "Mavzuni ochish"
-        vocab_label = "Lug‘at / Vocabulary"
-    else:
-        next_label = "Следующий вопрос"
-        grammar_label = "Грамматика"
-        topic_label = "Раскрытие темы"
-        vocab_label = "Лексика"
-
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
-        [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
-        [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
-        [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
-    ])
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=grammar_label, callback_data="student:detail:grammar")],
+            [InlineKeyboardButton(text=topic_label, callback_data="student:detail:topic")],
+            [InlineKeyboardButton(text=vocab_label, callback_data="student:detail:vocab")],
+            [InlineKeyboardButton(text=next_label, callback_data="student:detail:next")],
+        ]
+    )
 
 
 def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
@@ -195,8 +164,8 @@ def _t(language: StudentLanguage | None, key: str, **kwargs: object) -> str:
     return MESSAGES[lang][key].format(**kwargs)
 
 
-def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
-    markers = [
+def _feedback_markers() -> list[str]:
+    return [
         "Estimated IELTS Band:",
         "Task Response / Topic Development:",
         "Fluency and Coherence:",
@@ -206,60 +175,68 @@ def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
         "Corrected Answer:",
         "How to Improve:",
     ]
+
+
+def _parse_student_feedback_sections(raw_feedback: str) -> dict[str, str]:
+    markers = _feedback_markers()
     normalized = raw_feedback
+
     for marker in markers:
-        bare = re.escape(marker)
-        with_bold = re.escape(f"**{marker}**")
-        normalized = re.sub(with_bold, marker, normalized, flags=re.IGNORECASE)
-        normalized = re.sub(rf"^\s*\*\*{bare}\*\*\s*$", marker, normalized, flags=re.IGNORECASE | re.MULTILINE)
+        # Accept both plain and markdown-bold headings from GPT.
+        normalized = re.sub(
+            rf"^\s*\*\*{re.escape(marker)}\*\*\s*$",
+            marker,
+            normalized,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        normalized = re.sub(
+            rf"^\s*\*\*{re.escape(marker[:-1])}\*\*\s*:\s*$",
+            marker,
+            normalized,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
 
     sections: dict[str, str] = {}
+
     for i, marker in enumerate(markers):
         pattern = re.compile(rf"^\s*{re.escape(marker)}\s*$", flags=re.IGNORECASE | re.MULTILINE)
         start_match = pattern.search(normalized)
         if not start_match:
             continue
+
         content_start = start_match.end()
         end = len(normalized)
+
         for next_marker in markers[i + 1:]:
             next_pattern = re.compile(rf"^\s*{re.escape(next_marker)}\s*$", flags=re.IGNORECASE | re.MULTILINE)
             next_match = next_pattern.search(normalized, content_start)
             if next_match:
                 end = next_match.start()
                 break
-        content = normalized[content_start:end].strip()
-        sections[marker[:-1]] = content
+
+        sections[marker[:-1]] = normalized[content_start:end].strip()
+
     return sections
 
 
 def _sections_have_content(sections: dict[str, str]) -> bool:
-    required = [
-        "Estimated IELTS Band",
-        "Task Response / Topic Development",
-        "Fluency and Coherence",
-        "Lexical Resource",
-        "Grammar Range and Accuracy",
-        "Pronunciation / Delivery Notes",
-        "Corrected Answer",
-        "How to Improve",
-    ]
-    return all((sections.get(key) or "").strip() for key in required)
+    return all((sections.get(marker[:-1]) or "").strip() for marker in _feedback_markers())
 
 
-def _parse_student_feedback_sections_example() -> None:
-    """Local parser sanity example (not used in runtime)."""
-    sample = (
-        "**Estimated IELTS Band:**\nBand 6.0 overall.\n\n"
-        "**Task Response / Topic Development:**\nYou answered the question, but lacked examples.\n\n"
-        "**Fluency and Coherence:**\nMostly clear with some pauses.\n\n"
-        "**Lexical Resource:**\nUsed simple vocabulary repeatedly.\n\n"
-        "**Grammar Range and Accuracy:**\nSeveral tense errors appeared.\n\n"
-        "**Pronunciation / Delivery Notes:**\nTranscript-only review; precise pronunciation needs audio.\n\n"
-        "**Corrected Answer:**\nI usually spend my free time reading books and jogging.\n\n"
-        "**How to Improve:**\nAdd 2 concrete examples and vary linking words."
-    )
-    parsed = _parse_student_feedback_sections(sample)
-    assert _sections_have_content(parsed)
+def _first_paragraph(text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned:
+        return ""
+
+    # Keep only the short summary before detailed numbered/bulleted corrections.
+    for pattern in (r"\n\s*1[.)]\s+", r"\n\s*[-•]\s+"):
+        match = re.search(pattern, cleaned)
+        if match:
+            cleaned = cleaned[: match.start()].strip()
+            break
+
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", cleaned) if part.strip()]
+    return paragraphs[0] if paragraphs else cleaned
 
 
 async def _ensure_student(callback: types.CallbackQuery, bot: Bot) -> bool:
@@ -295,6 +272,7 @@ async def on_language_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         feedback=None,
         feedback_sections=None,
     )
+
     await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
     await callback.answer()
 
@@ -311,6 +289,7 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
 
     user_id = callback.from_user.id
     session = get_session(user_id)
+
     if not session or not session.language:
         create_session(user_id)
         await callback.message.answer(MESSAGES["ru"]["choose_language"], reply_markup=_language_keyboard())
@@ -336,10 +315,10 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
         feedback=None,
         feedback_sections=None,
     )
+
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
-        # It's safe to continue if the original message can't be edited.
         pass
 
     await callback.message.answer(_t(session.language, "generating_question", part=PART_LABELS[part]))
@@ -348,12 +327,68 @@ async def on_part_selected(callback: types.CallbackQuery, bot: Bot) -> None:
     try:
         question = await generate_ielts_question(part)
     except Exception as e:
-        logging.error("[student] Ошибка генерации вопроса для %s: %s", user_id, e)
+        logger.error("[student] Ошибка генерации вопроса для %s: %s", user_id, e)
         update_session(user_id, state="choosing_part", question=None)
         await callback.message.answer(_t(session.language, "question_error"), reply_markup=_parts_keyboard())
         return
 
-    await _send_question(callback.message, user_id=user_id, language=session.language, part=part, question=question)
+    await _send_question(
+        callback.message,
+        user_id=user_id,
+        language=session.language,
+        part=part,
+        question=question,
+    )
+
+
+@callback_router.callback_query(F.data.startswith("student:detail:"))
+async def on_student_detail(callback: types.CallbackQuery, bot: Bot) -> None:
+    if not await _ensure_student(callback, bot):
+        return
+
+    action = callback.data.rsplit(":", 1)[-1]
+    user_id = callback.from_user.id
+    session = get_session(user_id)
+
+    if not session or not session.language:
+        await callback.answer(_t(None, "session_lost"), show_alert=True)
+        await callback.message.answer(_t(None, "session_lost"), reply_markup=_parts_keyboard())
+        return
+
+    if action == "next":
+        update_session(
+            user_id,
+            state="choosing_part",
+            ielts_part=None,
+            question=None,
+            transcript=None,
+            feedback=None,
+            feedback_sections=None,
+        )
+        await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
+        await callback.answer()
+        return
+
+    if not session.feedback_sections:
+        await callback.answer(_t(session.language, "session_lost"), show_alert=True)
+        await callback.message.answer(_t(session.language, "session_lost"), reply_markup=_parts_keyboard())
+        return
+
+    marker = DETAIL_SECTION_KEYS.get(action)
+    if not marker:
+        await callback.answer("Unknown section", show_alert=True)
+        return
+
+    section_text = (session.feedback_sections.get(marker) or "").strip()
+    if not section_text:
+        await callback.answer(_t(session.language, "empty_section"), show_alert=True)
+        return
+
+    title = DETAIL_SECTION_TITLES[session.language][action]
+    for chunk in split_message(f"{title}\n\n{section_text}"):
+        await callback.message.answer(chunk)
+
+    await callback.answer()
 
 
 async def student_voice(message: types.Message, bot: Bot) -> None:
@@ -398,51 +433,8 @@ async def student_voice(message: types.Message, bot: Bot) -> None:
         if not _is_ready_for_voice(fresh_session):
             await _guide_to_current_step(message, fresh_session)
             return
+
         await _process_voice(message, bot, fresh_session)
-
-
-@callback_router.callback_query(F.data.startswith("student:detail:"))
-async def on_student_detail(callback: types.CallbackQuery, bot: Bot) -> None:
-    if not await _ensure_student(callback, bot):
-        return
-
-    action = callback.data.rsplit(":", 1)[-1]
-    user_id = callback.from_user.id
-    session = get_session(user_id)
-
-    if not session or not session.language or not session.feedback_sections:
-        await callback.answer(_t(None, "session_lost"), show_alert=True)
-        await callback.message.answer(_t(None, "session_lost"), reply_markup=_parts_keyboard())
-        return
-
-    if action == "next":
-        update_session(
-            user_id,
-            state="choosing_part",
-            question=None,
-            transcript=None,
-            feedback=None,
-            feedback_sections=None,
-        )
-        await callback.message.answer(_t(session.language, "choose_part"), reply_markup=_parts_keyboard())
-        await callback.answer()
-        return
-
-    marker = DETAIL_SECTION_KEYS.get(action)
-    if not marker:
-        await callback.answer("Unknown section", show_alert=True)
-        return
-
-    section_text = (session.feedback_sections.get(marker) or "").strip()
-    if not section_text:
-        await callback.answer(_t(session.language, "empty_section"), show_alert=True)
-        return
-
-    title = DETAIL_SECTION_TITLES[session.language][action]
-    for chunk in split_message(f"{title}\n\n{section_text}"):
-        await callback.message.answer(chunk)
-
-    await callback.answer()
 
 
 async def _guide_to_current_step(message: types.Message, session: StudentSession | None) -> None:
@@ -477,10 +469,12 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
 
     if session.ielts_part == "2" and message.voice:
         duration = message.voice.duration or 0
+
         if duration < 60:
             update_session(user_id, state="awaiting_voice")
             await message.answer(_t(language, "part2_too_short"))
             return
+
         if duration > 180:
             update_session(user_id, state="awaiting_voice")
             await message.answer(_t(language, "part2_too_long"))
@@ -498,18 +492,31 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
 
     try:
         process = await asyncio.create_subprocess_exec(
-            FFMPEG, "-y", "-i", ogg_path, "-ar", "16000", "-ac", "1", "-b:a", "64k", mp3_path,
+            FFMPEG,
+            "-y",
+            "-i",
+            ogg_path,
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
+            "-b:a",
+            "64k",
+            mp3_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         _, stderr = await process.communicate()
+
         if process.returncode != 0:
             raise RuntimeError(stderr.decode().strip())
+
     except Exception as e:
-        logging.error("[student] Ошибка конвертации для %s: %s", user_id, e)
+        logger.error("[student] Ошибка конвертации для %s: %s", user_id, e)
         update_session(user_id, state="awaiting_voice")
         await message.answer(_t(language, "convert_error"))
         return
+
     finally:
         asyncio.create_task(delete_file_after(ogg_path, AUDIO_TTL))
 
@@ -517,11 +524,13 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
 
     try:
         transcript = await transcribe_audio(mp3_path)
+
     except Exception as e:
-        logging.error("[student] Ошибка транскрипции для %s: %s", user_id, e)
+        logger.error("[student] Ошибка транскрипции для %s: %s", user_id, e)
         update_session(user_id, state="awaiting_voice")
         await message.answer(_t(language, "transcription_error"))
         return
+
     finally:
         asyncio.create_task(delete_file_after(mp3_path, AUDIO_TTL))
 
@@ -539,14 +548,28 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
             transcript=transcript,
             language=language,
         )
+
     except Exception as e:
-        logging.error("[student] Ошибка оценки для %s: %s", user_id, e)
+        logger.error("[student] Ошибка оценки для %s: %s", user_id, e)
         update_session(user_id, state="awaiting_voice", transcript=transcript)
         await message.answer(_t(language, "feedback_error"))
         return
 
     sections = _parse_student_feedback_sections(feedback)
-    if not sections or not _sections_have_content(sections):
+    parsed_ok = bool(sections) and _sections_have_content(sections)
+
+    if parsed_ok:
+        band_summary = _first_paragraph(sections.get("Estimated IELTS Band", ""))
+        topic_summary = _first_paragraph(sections.get("Task Response / Topic Development", ""))
+        main_feedback = "\n\n".join(
+            part
+            for part in [
+                band_summary,
+                f"Task Response / Topic Development:\n{topic_summary}" if topic_summary else "",
+            ]
+            if part.strip()
+        )
+    else:
         sections = {
             "Estimated IELTS Band": "",
             "Task Response / Topic Development": "",
@@ -557,17 +580,7 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
             "Corrected Answer": "",
             "How to Improve": feedback,
         }
-
-    parsed_ok = _sections_have_content(sections)
-    main_feedback = (
-        "\n\n".join(
-            part for part in [
-                f"Estimated IELTS Band:\n{sections.get('Estimated IELTS Band', '').strip()}".strip(),
-                f"Task Response / Topic Development:\n{sections.get('Task Response / Topic Development', '').strip()}".strip(),
-                f"Fluency and Coherence:\n{sections.get('Fluency and Coherence', '').strip()}".strip(),
-            ] if part and not part.endswith(":\n")
-        ) if parsed_ok else feedback
-    ) or feedback
+        main_feedback = feedback
 
     update_session(
         user_id,
@@ -577,7 +590,7 @@ async def _process_voice(message: types.Message, bot: Bot, session: StudentSessi
         feedback_sections=sections if parsed_ok else None,
     )
 
-    for chunk in split_message(main_feedback):
+    for chunk in split_message(main_feedback or feedback):
         await message.answer(chunk)
 
     if parsed_ok:
@@ -594,5 +607,6 @@ async def _send_question(
 ) -> None:
     update_session(user_id, ielts_part=part, state="awaiting_voice", question=question)
     await message.answer(_t(language, "question_ready", part=PART_LABELS[part], question=question))
+
     if part == "2":
         await message.answer(_t(language, "part2_duration_hint"))
